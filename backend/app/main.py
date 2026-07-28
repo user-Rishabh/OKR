@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .core.supabase_client import supabase
+from .routers import goals, companies
 
 app = FastAPI(title="PulseOKR API", version="0.1.0")
 
@@ -17,6 +18,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(goals.router)
+app.include_router(companies.router)
 
 @app.get("/api/health")
 async def health_check():

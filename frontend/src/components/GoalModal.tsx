@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Check, Edit2, Sparkles } from 'lucide-react';
+import { X, Check, Edit2, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 
 interface GoalModalProps {
@@ -7,46 +7,6 @@ interface GoalModalProps {
   onClose: () => void;
   onSave: (goal: Goal) => void;
 }
-
-const MOCK_SUGGESTIONS: Goal[] = [
-  {
-    id: 'mock-1',
-    objective_text: 'Improve backend API performance and reliability',
-    pillar_title: 'Improve platform reliability',
-    status: 'draft',
-    cycle: 'Q3-2026',
-    ai_generated: true,
-    key_results: [
-      { id: 'kr-1', kr_text: 'Reduce p95 API latency to <200ms', current_value: 0, progress_pct: 0 },
-      { id: 'kr-2', kr_text: 'Achieve 99.99% uptime for core services', current_value: 0, progress_pct: 0 },
-    ]
-  },
-  {
-    id: 'mock-2',
-    objective_text: 'Streamline the developer deployment pipeline',
-    pillar_title: 'Accelerate customer onboarding',
-    status: 'draft',
-    cycle: 'Q3-2026',
-    ai_generated: true,
-    key_results: [
-      { id: 'kr-3', kr_text: 'Reduce average CI/CD build time to under 5 minutes', current_value: 0, progress_pct: 0 },
-      { id: 'kr-4', kr_text: 'Increase automated test coverage to 85%', current_value: 0, progress_pct: 0 },
-    ]
-  },
-  {
-    id: 'mock-3',
-    objective_text: 'Enhance system monitoring and alerting',
-    pillar_title: 'Improve platform reliability',
-    status: 'draft',
-    cycle: 'Q3-2026',
-    ai_generated: true,
-    key_results: [
-      { id: 'kr-5', kr_text: 'Implement distributed tracing for all tier-1 microservices', current_value: 0, progress_pct: 0 },
-      { id: 'kr-6', kr_text: 'Reduce false-positive critical alerts by 50%', current_value: 0, progress_pct: 0 },
-      { id: 'kr-7', kr_text: 'Decrease Mean Time to Recovery (MTTR) to under 30 minutes', current_value: 0, progress_pct: 0 },
-    ]
-  }
-];
 
 function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) => void }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -87,7 +47,7 @@ function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) 
             <h4 className="font-semibold text-lg">{editedGoal.objective_text}</h4>
           )}
           <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium border border-blue-500/20">
-            {editedGoal.pillar_title}
+            {editedGoal.pillar_title || 'No Pillar'}
           </div>
         </div>
         <div className="flex gap-2">
@@ -142,20 +102,64 @@ function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) 
 }
 
 export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
-  const [step, setStep] = useState<'form' | 'suggestions'>('form');
+  const [step, setStep] = useState<'form' | 'loading' | 'suggestions'>('form');
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     job_title: '',
     department: '',
     focus_area: ''
   });
-  const [suggestions, setSuggestions] = useState<Goal[]>(MOCK_SUGGESTIONS);
+  const [suggestions, setSuggestions] = useState<Goal[]>([]);
 
   if (!isOpen) return null;
 
-  const handleSuggest = (e: React.FormEvent) => {
+  const handleSuggest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStep('suggestions');
-    setSuggestions(MOCK_SUGGESTIONS);
+    setStep('loading');
+    setError(null);
+
+    try {
+      // 1. Fetch current company ID
+      const companyRes = await fetch('http://localhost:8000/api/companies/current');
+      if (!companyRes.ok) throw new Error('Failed to fetch company context');
+      const company = await companyRes.json();
+      
+      // 2. Fetch suggestions from Groq
+      const suggestRes = await fetch('http://localhost:8000/api/goals/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          company_id: company.id
+        })
+      });
+      
+      if (!suggestRes.ok) throw new Error('Failed to generate suggestions. Please try again.');
+      
+      const data = await suggestRes.json();
+      
+      // Map API response to our local Goal interface
+      const mappedSuggestions: Goal[] = data.map((item: any, i: number) => ({
+        id: `temp-${i}`,
+        objective_text: item.objective,
+        pillar_title: item.aligned_pillar === 'none' ? undefined : item.aligned_pillar,
+        status: 'draft',
+        cycle: 'Q3-2026',
+        ai_generated: true,
+        key_results: item.key_results.map((kr: any, j: number) => ({
+          id: `temp-kr-${i}-${j}`,
+          kr_text: kr.text,
+          current_value: 0,
+          progress_pct: 0
+        }))
+      }));
+
+      setSuggestions(mappedSuggestions);
+      setStep('suggestions');
+    } catch (err: any) {
+      setError(err.message);
+      setStep('form');
+    }
   };
 
   const handleSaveGoal = (goal: Goal) => {
@@ -169,6 +173,7 @@ export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
 
   const handleClose = () => {
     setStep('form');
+    setError(null);
     setFormData({ job_title: '', department: '', focus_area: '' });
     onClose();
   };
@@ -181,8 +186,8 @@ export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
           <h2 className="text-xl font-semibold flex items-center gap-2">
-            {step === 'form' ? 'Create New Goal' : 'AI-Suggested Goals'}
-            {step === 'suggestions' && <Sparkles size={20} className="text-blue-400" />}
+            {step === 'form' || step === 'loading' ? 'Create New Goal' : 'AI-Suggested Goals'}
+            {(step === 'suggestions' || step === 'loading') && <Sparkles size={20} className="text-blue-400" />}
           </h2>
           <button onClick={handleClose} className="p-1 text-zinc-400 hover:text-white rounded-md hover:bg-zinc-800 transition-colors">
             <X size={20} />
@@ -191,8 +196,22 @@ export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
 
         {/* Content */}
         <div className="p-6 overflow-y-auto">
-          {step === 'form' ? (
+          {step === 'loading' ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Loader2 size={40} className="text-blue-500 animate-spin mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">Analyzing your focus area</h3>
+              <p className="text-zinc-400 max-w-sm">
+                Our AI is matching your role against company pillars to generate optimal SMART goals...
+              </p>
+            </div>
+          ) : step === 'form' ? (
             <form onSubmit={handleSuggest} className="space-y-5">
+              {error && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4 flex items-start gap-3 text-red-400">
+                  <AlertCircle size={20} className="shrink-0 mt-0.5" />
+                  <p className="text-sm">{error}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-1.5">Job Title</label>
                 <input
