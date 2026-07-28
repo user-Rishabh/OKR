@@ -1,4 +1,5 @@
 import json
+import re
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -54,9 +55,19 @@ Company Strategic Pillars:
 Rules:
 1. Each objective must follow SMART criteria (Specific, Measurable, Achievable, Relevant, Time-bound).
 2. Each objective must have 2 to 4 key results.
-3. Each key result must have a specific 'suggested_metric' (e.g. 'Reduce latency to 200ms').
+3. Each key result must have a specific 'suggested_metric' that INCLUDES A CONCRETE QUANTIFIABLE TARGET (a percentage, number, time duration, or count). Vague phrases without numbers will be rejected.
 4. 'aligned_pillar' must be EXACTLY ONE of these titles: {pillar_titles}, or 'none' if it doesn't fit any.
 5. You MUST return ONLY a raw JSON array of objects. No markdown formatting, no code blocks, no preamble, no explanations.
+
+Examples of GOOD suggested_metric values:
+- "Reduce average query latency from 450ms to under 150ms"
+- "Increase automated test coverage to 85%"
+- "Ship 3 new features by end of Q3"
+
+Examples of BAD suggested_metric values (missing numbers):
+- "Optimize database queries to reduce latency"
+- "Improve performance"
+- "Launch new features"
 
 Expected JSON schema:
 [
@@ -69,13 +80,15 @@ Expected JSON schema:
   }}
 ]"""
 
-    # 3. Call Groq with retry logic for JSON parsing
-    max_retries = 1
+    # 3. Call Groq with retry logic for JSON parsing and metrics validation
+    max_retries = 2
+    last_error_message = "Your previous response was not valid JSON. Please fix it and return ONLY the raw JSON array without markdown formatting."
+    
     for attempt in range(max_retries + 1):
         try:
             messages = [{"role": "system", "content": system_prompt}]
             if attempt > 0:
-                messages.append({"role": "user", "content": "Your previous response was not valid JSON. Please fix it and return ONLY the raw JSON array without markdown formatting."})
+                messages.append({"role": "user", "content": f"Your previous response failed validation: {last_error_message}. Please fix it and ensure you return ONLY the raw JSON array."})
             else:
                 messages.append({"role": "user", "content": "Generate the OKRs based on the provided profile and focus area."})
                 
@@ -96,14 +109,26 @@ Expected JSON schema:
                 
             raw_content = raw_content.strip()
             
-            parsed_json = json.loads(raw_content)
+            try:
+                parsed_json = json.loads(raw_content)
+            except json.JSONDecodeError as je:
+                last_error_message = "Invalid JSON format. Do not use markdown blocks."
+                raise ValueError(last_error_message)
+            
+            # Custom validation: ensure every suggested_metric has a numeric value
+            for goal in parsed_json:
+                for kr in goal.get("key_results", []):
+                    metric = kr.get("suggested_metric", "")
+                    if not re.search(r'\d', metric):
+                        last_error_message = f"The suggested_metric '{metric}' is missing a numeric value. It MUST contain a concrete number."
+                        raise ValueError(last_error_message)
             
             # Validate with Pydantic
             # We parse a raw list into the wrapper object to validate each element
             validated = SuggestionResponse(suggestions=parsed_json)
             return validated.suggestions
             
-        except (json.JSONDecodeError, ValueError) as e:
+        except ValueError as e:
             if attempt == max_retries:
-                raise HTTPException(status_code=502, detail="Failed to parse AI response into valid goals after retries.")
+                raise HTTPException(status_code=502, detail=f"Failed to generate valid goals after retries. Last error: {str(e)}")
             continue

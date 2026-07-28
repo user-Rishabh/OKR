@@ -70,14 +70,24 @@ function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) 
             <li key={kr.id} className="flex items-start gap-2 text-sm">
               <span className="text-zinc-500 mt-1">•</span>
               {isEditing ? (
-                <input
-                  type="text"
-                  value={kr.kr_text}
-                  onChange={(e) => updateKR(idx, e.target.value)}
-                  className="flex-1 bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-sm text-zinc-300 focus:outline-none focus:border-blue-500"
-                />
+                <div className="flex-1 space-y-1">
+                  <input
+                    type="text"
+                    value={kr.kr_text}
+                    onChange={(e) => updateKR(idx, e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded px-2 py-1 text-sm text-zinc-300 focus:outline-none focus:border-blue-500"
+                  />
+                  {kr.suggested_metric && (
+                    <span className="text-xs text-zinc-500 block">Metric: {kr.suggested_metric}</span>
+                  )}
+                </div>
               ) : (
-                <span className="text-zinc-300">{kr.kr_text}</span>
+                <div className="flex-1">
+                  <span className="text-zinc-300 block">{kr.kr_text}</span>
+                  {kr.suggested_metric && (
+                    <span className="text-xs text-zinc-500">Target: {kr.suggested_metric}</span>
+                  )}
+                </div>
               )}
             </li>
           ))}
@@ -149,6 +159,7 @@ export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
         key_results: item.key_results.map((kr: any, j: number) => ({
           id: `temp-kr-${i}-${j}`,
           kr_text: kr.text,
+          suggested_metric: kr.suggested_metric,
           current_value: 0,
           progress_pct: 0
         }))

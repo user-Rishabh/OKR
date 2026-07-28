@@ -1,6 +1,7 @@
 export interface KeyResult {
   id: string;
   kr_text: string;
+  suggested_metric?: string;
   target_value?: number;
   current_value: number;
   unit?: string;

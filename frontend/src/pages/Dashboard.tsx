@@ -106,9 +106,14 @@ export default function Dashboard() {
                   {goal.key_results.map((kr) => (
                     <div key={kr.id} className="space-y-3">
                       <div className="flex justify-between items-start gap-4">
-                        <p className="text-sm font-medium text-zinc-300 flex-1">{kr.kr_text}</p>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-zinc-300">{kr.kr_text}</p>
+                          {kr.suggested_metric && (
+                            <p className="text-xs text-zinc-500 mt-1">Target: {kr.suggested_metric}</p>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-zinc-500 w-12 text-right">
+                          <span className="text-xs font-medium text-zinc-500 w-12 text-right mt-0.5">
                             {kr.progress_pct}%
                           </span>
                         </div>
