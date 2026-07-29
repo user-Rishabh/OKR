@@ -1,16 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { AlertCircle, Loader2, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Goal } from '../types';
+import ProgressRing from '../components/ProgressRing';
+import { SkeletonCard } from '../components/Skeleton';
 
 interface MemberWithGoals {
   id: string;
+  full_name: string;
   role: string;
   job_title: string;
   department: string;
   goals: Goal[];
 }
+
+const topBarClass = (pct: number) =>
+  pct >= 70 ? 'card-top-green' : pct >= 30 ? 'card-top-orange' : 'card-top-red';
 
 export default function Team() {
   const { currentUser, session } = useAuth();
@@ -20,136 +26,136 @@ export default function Team() {
 
   useEffect(() => {
     const fetchTeamData = async () => {
-      if (!currentUser || !session || !currentUser.team_id) {
-        setLoading(false);
-        return;
-      }
+      if (!currentUser || !session || !currentUser.team_id) { setLoading(false); return; }
       try {
         const res = await fetch(`http://localhost:8000/api/goals/team?team_id=${currentUser.team_id}`, {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`
-          }
+          headers: { Authorization: `Bearer ${session.access_token}` }
         });
-        if (!res.ok) {
-          throw new Error('Failed to fetch team data');
-        }
+        if (!res.ok) throw new Error('Failed to fetch team data');
         const data = await res.json();
-        // Show team members (filter out the logged-in manager if returned)
         setMembers(data.filter((m: MemberWithGoals) => m.role === 'employee' || m.id !== currentUser.id));
-      } catch (err: any) {
-        console.error(err);
-        setError(err.message || 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
+      } catch (err: any) { setError(err.message || 'An error occurred'); }
+      finally { setLoading(false); }
     };
 
-    if (currentUser && currentUser.role !== 'employee') {
-      fetchTeamData();
-    } else {
-      setLoading(false);
-    }
+    if (currentUser && currentUser.role !== 'employee') fetchTeamData();
+    else setLoading(false);
   }, [currentUser, session]);
 
-  if (currentUser && currentUser.role === 'employee') {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/20 border border-zinc-800 rounded-xl mt-8">
-        <AlertCircle size={48} className="text-red-400 mb-4" />
-        <h2 className="text-xl font-semibold text-white mb-2">Access restricted</h2>
-        <p className="text-zinc-400">This page is only available to managers and admins.</p>
-      </div>
-    );
-  }
+  if (currentUser?.role === 'employee') return (
+    <div className="card card-top-red flex flex-col items-center justify-center p-14 mt-8 text-center font-sans">
+      <AlertCircle size={40} style={{ color: '#EF4444', marginBottom: 12 }} />
+      <h2 className="text-xl font-bold" style={{ color: '#1A1A1A' }}>Access Restricted</h2>
+      <p className="text-sm mt-1" style={{ color: '#6B6558' }}>This page is only available to managers and admins.</p>
+    </div>
+  );
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 mt-8">
-        <Loader2 size={32} className="text-blue-500 animate-spin mb-4" />
-        <p className="text-zinc-400">Loading team OKRs...</p>
+  if (loading) return (
+    <div className="space-y-8 font-sans">
+      <div>
+        <h1 style={{ fontSize: 40 }}>Team <span className="gradient-text">View</span></h1>
+        <p className="mt-1 text-base" style={{ color: '#6B6558' }}>View and manage OKRs across your team.</p>
       </div>
-    );
-  }
+      <SkeletonCard /><SkeletonCard /><SkeletonCard />
+    </div>
+  );
 
-  if (error) {
-    return (
-      <div className="flex flex-col items-center justify-center p-12 bg-red-500/10 border border-red-500/20 rounded-xl mt-8">
-        <AlertCircle size={48} className="text-red-400 mb-4" />
-        <h2 className="text-xl font-semibold text-white mb-2">Error</h2>
-        <p className="text-zinc-400">{error}</p>
-      </div>
-    );
-  }
+  if (error) return (
+    <div className="card card-top-red flex flex-col items-center justify-center p-12 mt-8 text-center font-sans">
+      <AlertCircle size={40} style={{ color: '#EF4444', marginBottom: 12 }} />
+      <h2 className="text-xl font-bold" style={{ color: '#1A1A1A' }}>Error</h2>
+      <p className="text-sm mt-1" style={{ color: '#EF4444' }}>{error}</p>
+    </div>
+  );
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Team View</h1>
-        <p className="text-zinc-400 mt-2">View and manage OKRs across your team.</p>
+    <div className="space-y-8 font-sans animate-stagger-1">
+      <div className="flex justify-between items-center flex-wrap gap-5">
+        <div>
+          <h1 style={{ fontSize: 40 }}>Team <span className="gradient-text">View</span></h1>
+          <p className="mt-1 text-base" style={{ color: '#6B6558' }}>View and manage OKRs across your team.</p>
+        </div>
+        <div className="icon-badge icon-badge-orange" style={{ width: 44, height: 44, borderRadius: 12 }}>
+          <Users size={22} />
+        </div>
       </div>
 
       {members.length === 0 ? (
-        <div className="border border-dashed border-zinc-800 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-zinc-900/20">
-          <p className="text-zinc-500">No team members found in your team.</p>
+        <div className="rounded-2xl p-14 text-center" style={{ border: '2px dashed #E8E2D6' }}>
+          <p className="text-sm" style={{ color: '#6B6558' }}>No team members found in your team.</p>
         </div>
       ) : (
-        <div className="space-y-8">
-          {members.map(member => (
-            <div key={member.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 pb-4 border-b border-zinc-800">
-                <div>
-                  <Link 
-                    to={`/team/member/${member.id}`}
-                    className="group inline-flex items-center gap-2 text-xl font-bold text-white hover:text-blue-400 transition-colors"
-                  >
-                    {member.full_name} 
-                    <span className="text-zinc-500 font-normal text-sm">({member.job_title} • {member.department})</span>
-                    <ArrowRight size={16} className="opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
-                  </Link>
-                  <p className="text-zinc-500 text-xs mt-1">Role: {member.role}</p>
-                </div>
-                <div className="text-sm text-zinc-400 bg-zinc-950 border border-zinc-800 px-3 py-1.5 rounded-lg self-start sm:self-auto">
-                  {member.goals?.length || 0} Active Goals
-                </div>
-              </div>
+        <div className="space-y-6">
+          {members.map(member => {
+            const allKRs = member.goals.flatMap(g => g.key_results || []);
+            const avgPct = allKRs.length > 0 ? allKRs.reduce((s, k) => s + k.progress_pct, 0) / allKRs.length : 0;
 
-              {(!member.goals || member.goals.length === 0) ? (
-                <p className="text-zinc-500 text-sm italic">No goals created yet.</p>
-              ) : (
-                <div className="space-y-6">
-                  {member.goals.map(goal => (
-                    <div key={goal.id} className="bg-zinc-950 border border-zinc-800 rounded-lg p-5 space-y-4">
-                      <div>
-                        <h4 className="font-semibold text-zinc-200">{goal.objective_text}</h4>
-                        <div className="flex gap-2 mt-2">
-                          <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded uppercase">
-                            {goal.status}
-                          </span>
-                          <span className="text-xs text-zinc-500 font-medium self-center">{goal.cycle}</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        {goal.key_results?.map(kr => (
-                          <div key={kr.id} className="space-y-1.5">
-                            <div className="flex justify-between text-sm">
-                              <span className="text-zinc-400">{kr.kr_text}</span>
-                              <span className="text-zinc-500 font-medium">{kr.progress_pct}%</span>
-                            </div>
-                            <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-blue-500 rounded-full" 
-                                style={{ width: `${kr.progress_pct}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
+            return (
+              <div key={member.id} className={`card ${topBarClass(avgPct)} overflow-hidden`}>
+                {/* Member header */}
+                <div className="p-6" style={{ borderBottom: '1px solid #E8E2D6' }}>
+                  <div className="flex justify-between items-start gap-4 flex-wrap">
+                    <div>
+                      <Link
+                        to={`/team/member/${member.id}`}
+                        className="group inline-flex items-center gap-2 text-xl font-bold transition-colors"
+                        style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}
+                        onMouseOver={e => e.currentTarget.style.color = '#B5651D'}
+                        onMouseOut={e => e.currentTarget.style.color = '#1A1A1A'}
+                      >
+                        {member.full_name}
+                        <span className="font-normal text-sm" style={{ color: '#6B6558', fontFamily: 'Inter, sans-serif' }}>
+                          ({member.job_title} · {member.department})
+                        </span>
+                        <ArrowRight size={16} style={{ color: '#F2994A' }} />
+                      </Link>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="pill-neutral">{member.role}</span>
                       </div>
                     </div>
-                  ))}
+                    <span className="gradient-badge px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wide font-mono">
+                      {member.goals?.length || 0} Goals
+                    </span>
+                  </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Goals */}
+                <div className="p-6 space-y-4" style={{ background: '#FAFAF8' }}>
+                  {(!member.goals || member.goals.length === 0) ? (
+                    <p className="text-sm italic" style={{ color: '#6B6558' }}>No goals created yet.</p>
+                  ) : (
+                    member.goals.map(goal => {
+                      const gKRs = goal.key_results || [];
+                      const gPct = gKRs.length > 0 ? gKRs.reduce((s, k) => s + k.progress_pct, 0) / gKRs.length : 0;
+                      return (
+                        <div key={goal.id} className={`card ${topBarClass(gPct)} p-5 space-y-3`}>
+                          <div className="flex justify-between items-start gap-3">
+                            <div>
+                              <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{goal.objective_text}</h4>
+                              <div className="flex gap-2 mt-2">
+                                <span className={gPct >= 70 ? 'pill-green' : gPct >= 30 ? 'pill-orange' : 'pill-neutral'}>{goal.status}</span>
+                                <span className="text-xs font-mono self-center" style={{ color: '#6B6558' }}>{goal.cycle}</span>
+                              </div>
+                            </div>
+                            <ProgressRing progress={gPct} size={48} strokeWidth={4.5} />
+                          </div>
+
+                          <div className="space-y-2 pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
+                            {gKRs.map(kr => (
+                              <div key={kr.id} className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg" style={{ background: '#F7F4EE' }}>
+                                <span className="text-sm font-medium flex-1" style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
+                                <ProgressRing progress={kr.progress_pct} size={36} strokeWidth={4} />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

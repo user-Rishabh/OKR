@@ -1,16 +1,305 @@
+@import url('https://api.fontshare.com/v2/css?f[]=clash-display@500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @import "tailwindcss";
 
+/* ─── LIGHT CREAM DESIGN TOKENS ─────────────────────────────────────────── */
 @theme {
-  --color-zinc-50: #fafafa;
-  --color-zinc-400: #a1a1aa;
-  --color-zinc-800: #27272a;
-  --color-zinc-900: #18181b;
-  --color-zinc-950: #09090b;
+  /* Backgrounds */
+  --color-bg-base:    #F7F4EE;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-hover:   #F0EDE6;
+
+  /* Accent palette */
+  --color-brand-amber:  #F2994A;
+  --color-brand-orange: #B5651D;
+  --color-brand-teal:   #10B981;
+  --color-brand-red:    #EF4444;
+  --color-brand-blue:   #3B82F6;
+
+  /* Typography */
+  --color-text-primary: #1A1A1A;
+  --color-text-muted:   #6B6558;
+
+  /* Borders */
+  --color-border-divider: #E8E2D6;
+
+  /* Fonts */
+  --font-sans:    'Inter', sans-serif;
+  --font-display: 'Clash Display', 'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Animations */
+  --animate-shake:   shake 0.4s ease-in-out;
+  --animate-shimmer: shimmer 1.5s infinite linear;
 }
 
+/* ─── KEYFRAMES ──────────────────────────────────────────────────────────── */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60%  { transform: translateX(-5px); }
+  40%, 80%  { transform: translateX(5px); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── BASE ───────────────────────────────────────────────────────────────── */
 @layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
   body {
-    background-color: var(--color-zinc-950);
-    color: var(--color-zinc-50);
+    background-color: #F7F4EE;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-family: 'Clash Display', 'Inter', sans-serif !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.15 !important;
+    color: #1A1A1A;
+  }
+
+  h2, h3 {
+    font-family: 'Clash Display', 'Inter', sans-serif;
+    letter-spacing: -0.015em;
+    color: #1A1A1A;
+  }
+
+  /* Inputs get warm cream bg */
+  input, textarea, select {
+    background-color: #F7F4EE;
+    border: 1px solid #E8E2D6;
+    color: #1A1A1A;
+    border-radius: 10px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input::placeholder, textarea::placeholder {
+    color: #A89F92;
+  }
+  input:focus, textarea:focus, select:focus, button:focus-visible {
+    outline: none;
+    border-color: #F2994A;
+    box-shadow: 0 0 0 3px rgba(242, 153, 74, 0.2);
+  }
+}
+
+/* ─── UTILITY CLASSES ────────────────────────────────────────────────────── */
+@layer utilities {
+
+  /* ── Card: white + subtle shadow ─────────── */
+  .card {
+    background: #FFFFFF;
+    border: 1px solid #E8E2D6;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  }
+  .card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    transform: translateY(-2px);
+    border-color: #D4C9B8;
+  }
+
+  /* Coloured top accent bar per card context */
+  .card-top-green  { border-top: 4px solid #10B981 !important; }
+  .card-top-orange { border-top: 4px solid #F2994A !important; }
+  .card-top-blue   { border-top: 4px solid #3B82F6 !important; }
+  .card-top-neutral{ border-top: 4px solid #D4C9B8 !important; }
+  .card-top-red    { border-top: 4px solid #EF4444 !important; }
+
+  /* glass-card alias → maps to .card in light mode */
+  .glass-card {
+    background: #FFFFFF !important;
+    border: 1px solid #E8E2D6 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
+  }
+  .hover-glow {
+    transition: box-shadow 0.2s, transform 0.2s, border-color 0.2s;
+  }
+  .hover-glow:hover {
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1) !important;
+    transform: translateY(-2px) !important;
+    border-color: #F2994A !important;
+  }
+
+  /* ── Gradient text ─────────────────────────── */
+  .gradient-text {
+    background: linear-gradient(135deg, #F2994A, #B5651D);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    display: inline;
+  }
+
+  /* ── Gradient button (warm orange) ─────────── */
+  .gradient-button {
+    background: linear-gradient(135deg, #F2994A, #B5651D) !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 2px 12px rgba(242, 153, 74, 0.3) !important;
+    border: none !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+  .gradient-button:hover:not(:disabled) {
+    box-shadow: 0 4px 20px rgba(242, 153, 74, 0.45) !important;
+    transform: translateY(-1px) scale(1.01) !important;
+    filter: brightness(1.04);
+  }
+  .gradient-button:active:not(:disabled) {
+    transform: translateY(0) scale(0.99) !important;
+  }
+  .gradient-button:disabled {
+    opacity: 0.55 !important;
+    cursor: not-allowed !important;
+  }
+
+  /* ── Gradient badge ────────────────────────── */
+  .gradient-badge {
+    background: linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1));
+    border: 1px solid rgba(242,153,74,0.35);
+    color: #B5651D;
+  }
+
+  /* ── Status pills ─────────────────────────── */
+  .pill-green {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #ECFDF5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-green::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #10B981;
+    flex-shrink: 0;
+  }
+  .pill-orange {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #FFF7ED;
+    color: #C2410C;
+    border: 1px solid #FED7AA;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-orange::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #F2994A;
+    flex-shrink: 0;
+  }
+  .pill-blue {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #EFF6FF;
+    color: #2563EB;
+    border: 1px solid #BFDBFE;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-blue::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #3B82F6;
+    flex-shrink: 0;
+  }
+  .pill-neutral {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #F5F3EF;
+    color: #6B6558;
+    border: 1px solid #E8E2D6;
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .pill-neutral::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #9CA3AF;
+    flex-shrink: 0;
+  }
+
+  /* ── Icon badge ─────────────────────────────── */
+  .icon-badge {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .icon-badge-orange { background: #FFF7ED; color: #C2410C; }
+  .icon-badge-green  { background: #ECFDF5; color: #059669; }
+  .icon-badge-blue   { background: #EFF6FF; color: #2563EB; }
+
+  /* ── Stagger animations ──────────────────────── */
+  .animate-stagger-1 {
+    animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 60ms both;
+  }
+  .animate-stagger-2 {
+    animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  }
+  .animate-stagger-3 {
+    animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+  }
+  .animate-stagger-4 {
+    animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 240ms both;
+  }
+  .animate-stagger-5 {
+    animation: slideUpFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
+  }
+
+  /* ── Shimmer skeleton ──────────────────────── */
+  .shimmer {
+    background: linear-gradient(90deg, #F0EDE6 25%, #FFFFFF 50%, #F0EDE6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+/* ─── REDUCED MOTION ────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
   }
 }
