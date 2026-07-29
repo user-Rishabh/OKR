@@ -7,6 +7,20 @@ from groq import Groq
 from ..core.config import settings
 from ..core.supabase_client import supabase
 
+class KeyResultCreate(BaseModel):
+    kr_text: str
+    target_value: Optional[float] = None
+    unit: Optional[str] = None
+    suggested_metric_text: Optional[str] = None
+
+class GoalCreate(BaseModel):
+    user_id: str
+    cycle: str
+    objective_text: str
+    pillar_id: Optional[str] = None
+    key_results: List[KeyResultCreate]
+    ai_generated: bool = False
+
 router = APIRouter(prefix="/api/goals", tags=["goals"])
 
 # Initialize Groq client
@@ -29,6 +43,45 @@ class GoalSuggestion(BaseModel):
 
 class SuggestionResponse(BaseModel):
     suggestions: List[GoalSuggestion]
+
+@router.post("", response_model=dict)
+async def create_goal(goal_data: GoalCreate):
+    goal_insert_data = {
+        "user_id": goal_data.user_id,
+        "cycle": goal_data.cycle,
+        "objective_text": goal_data.objective_text,
+        "pillar_id": goal_data.pillar_id,
+        "status": "active",
+        "ai_generated": goal_data.ai_generated
+    }
+    goal_res = supabase.table("goals").insert(goal_insert_data).execute()
+    if not goal_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create goal")
+    created_goal = goal_res.data[0]
+    
+    kr_insert_data = []
+    for kr in goal_data.key_results:
+        kr_insert_data.append({
+            "goal_id": created_goal["id"],
+            "kr_text": kr.kr_text,
+            "target_value": kr.target_value,
+            "unit": kr.unit,
+            "current_value": 0,
+            "progress_pct": 0
+        })
+        
+    if kr_insert_data:
+        kr_res = supabase.table("key_results").insert(kr_insert_data).execute()
+        created_goal["key_results"] = kr_res.data
+    else:
+        created_goal["key_results"] = []
+        
+    return created_goal
+
+@router.get("")
+async def get_goals(user_id: str):
+    goals_res = supabase.table("goals").select("*, key_results(*)").eq("user_id", user_id).order("created_at", desc=True).execute()
+    return goals_res.data
 
 @router.post("/suggest", response_model=List[GoalSuggestion])
 async def suggest_goals(request: SuggestionRequest):

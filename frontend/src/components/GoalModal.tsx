@@ -6,23 +6,47 @@ interface GoalModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (goal: Goal) => void;
+  userId: string;
 }
 
-function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) => void }) {
+
+function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal, onSave: (goal: Goal) => void, userId: string }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedGoal, setEditedGoal] = useState<Goal>(goal);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isEditing) {
       setIsEditing(false);
     } else {
-      // Create a unique ID and mark as active when saved
-      onSave({
-        ...editedGoal,
-        id: crypto.randomUUID(),
-        status: 'active',
-        key_results: editedGoal.key_results.map(kr => ({ ...kr, id: crypto.randomUUID() }))
-      });
+      setIsSaving(true);
+      try {
+        const res = await fetch('http://localhost:8000/api/goals', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: userId,
+            cycle: editedGoal.cycle,
+            objective_text: editedGoal.objective_text,
+            pillar_id: null, // the API expects pillar_id but frontend has pillar_title. We'll send null for now or leave it out if optional
+            ai_generated: editedGoal.ai_generated,
+            key_results: editedGoal.key_results.map(kr => ({
+              kr_text: kr.kr_text,
+              target_value: kr.target_value ? Number(kr.target_value) : null,
+              unit: kr.unit || null,
+              suggested_metric_text: kr.suggested_metric
+            }))
+          })
+        });
+        if (!res.ok) throw new Error('Failed to save goal');
+        const savedGoal = await res.json();
+        onSave(savedGoal);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to save goal');
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -97,11 +121,13 @@ function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) 
       <div className="flex justify-end pt-2 border-t border-zinc-800/50 mt-2">
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-zinc-200 transition-colors"
+          disabled={isSaving}
+          className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-md text-sm font-medium hover:bg-zinc-200 transition-colors disabled:opacity-50"
         >
+          {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
           {isEditing ? 'Done Editing' : (
             <>
-              <Check size={16} />
+              {!isSaving && <Check size={16} />}
               Accept & Save
             </>
           )}
@@ -111,7 +137,7 @@ function SuggestedGoalCard({ goal, onSave }: { goal: Goal, onSave: (goal: Goal) 
   );
 }
 
-export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
+export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModalProps) {
   const [step, setStep] = useState<'form' | 'loading' | 'suggestions'>('form');
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -272,7 +298,7 @@ export default function GoalModal({ isOpen, onClose, onSave }: GoalModalProps) {
                 Based on your focus area, here are some suggested goals. You can edit them before saving.
               </p>
               {suggestions.map(goal => (
-                <SuggestedGoalCard key={goal.id} goal={goal} onSave={handleSaveGoal} />
+                <SuggestedGoalCard key={goal.id} goal={goal} onSave={handleSaveGoal} userId={userId} />
               ))}
               {suggestions.length === 0 && (
                 <div className="text-center py-8 text-zinc-500">

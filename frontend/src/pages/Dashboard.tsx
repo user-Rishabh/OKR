@@ -1,17 +1,42 @@
-import React, { useState } from 'react';
-import { Plus, Target, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Target, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
 
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
+  const [userId, setUserId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const debounceRef = useRef<Record<string, NodeJS.Timeout>>({});
+
+  useEffect(() => {
+    const fetchGoals = async () => {
+      try {
+        const userRes = await fetch('http://localhost:8000/api/users/demo');
+        const userData = await userRes.json();
+        setUserId(userData.user_id);
+        
+        if (userData.user_id !== 'no-user-found') {
+          const goalsRes = await fetch(`http://localhost:8000/api/goals?user_id=${userData.user_id}`);
+          const goalsData = await goalsRes.json();
+          setActiveGoals(goalsData);
+        }
+      } catch (err) {
+        console.error("Failed to load dashboard data", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGoals();
+  }, []);
 
   const handleAddGoal = (goal: Goal) => {
     setActiveGoals(prev => [goal, ...prev]);
   };
 
   const updateKRProgress = (goalId: string, krId: string, newProgress: number) => {
+    // Optimistic UI update
     setActiveGoals(prev => prev.map(goal => {
       if (goal.id !== goalId) return goal;
       const updatedKRs = goal.key_results.map(kr => 
@@ -19,7 +44,25 @@ export default function Dashboard() {
       );
       return { ...goal, key_results: updatedKRs };
     }));
+
+    // Debounced API call
+    if (debounceRef.current[krId]) {
+      clearTimeout(debounceRef.current[krId]);
+    }
+    
+    debounceRef.current[krId] = setTimeout(async () => {
+      try {
+        await fetch(`http://localhost:8000/api/key-results/${krId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ progress_pct: newProgress })
+        });
+      } catch (err) {
+        console.error("Failed to update KR progress", err);
+      }
+    }, 500);
   };
+
 
   return (
     <div className="space-y-8">
@@ -57,7 +100,12 @@ export default function Dashboard() {
           My Active Goals
         </h2>
         
-        {activeGoals.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/20 border border-zinc-800 rounded-xl">
+            <Loader2 size={32} className="text-blue-500 animate-spin mb-4" />
+            <p className="text-zinc-400">Loading goals...</p>
+          </div>
+        ) : activeGoals.length === 0 ? (
           <div className="border border-dashed border-zinc-800 rounded-xl p-12 flex flex-col items-center justify-center text-center bg-zinc-900/20">
             <div className="w-12 h-12 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
               <Sparkles className="text-zinc-400" size={24} />
@@ -147,6 +195,7 @@ export default function Dashboard() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleAddGoal}
+        userId={userId}
       />
     </div>
   );
