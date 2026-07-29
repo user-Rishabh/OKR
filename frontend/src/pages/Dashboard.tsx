@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Target, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Target, Sparkles, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
 
@@ -61,6 +61,27 @@ export default function Dashboard() {
         console.error("Failed to update KR progress", err);
       }
     }, 500);
+  };
+
+  const handleDeleteGoal = async (goalId: string) => {
+    if (!window.confirm("Are you sure you want to delete this goal? This action cannot be undone.")) {
+      return;
+    }
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/goals/${goalId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to delete goal');
+      }
+      
+      setActiveGoals(prev => prev.filter(g => g.id !== goalId));
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete the goal. Please try again.');
+    }
   };
 
 
@@ -141,12 +162,21 @@ export default function Dashboard() {
                         )}
                       </div>
                     </div>
-                    {goal.ai_generated && (
-                      <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400 bg-purple-400/10 px-2 py-1 rounded border border-purple-400/20">
-                        <Sparkles size={12} />
-                        AI Suggested
-                      </div>
-                    )}
+                    <div className="flex items-center gap-4">
+                      {goal.ai_generated && (
+                        <div className="flex items-center gap-1.5 text-xs font-medium text-purple-400 bg-purple-400/10 px-2 py-1 rounded border border-purple-400/20">
+                          <Sparkles size={12} />
+                          AI Suggested
+                        </div>
+                      )}
+                      <button 
+                        onClick={() => handleDeleteGoal(goal.id)}
+                        className="text-zinc-600 hover:text-red-400 hover:bg-red-400/10 p-1.5 rounded transition-colors"
+                        title="Delete Goal"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 

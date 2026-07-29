@@ -83,6 +83,13 @@ async def get_goals(user_id: str):
     goals_res = supabase.table("goals").select("*, key_results(*)").eq("user_id", user_id).order("created_at", desc=True).execute()
     return goals_res.data
 
+@router.delete("/{goal_id}", status_code=204)
+async def delete_goal(goal_id: str):
+    res = supabase.table("goals").delete().eq("id", goal_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return None
+
 @router.post("/suggest", response_model=List[GoalSuggestion])
 async def suggest_goals(request: SuggestionRequest):
     # TODO: Add rate limiting here (e.g. max 5 requests per minute per user)
