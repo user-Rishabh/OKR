@@ -38,3 +38,8 @@ async def get_demo_user():
         if not goals.data:
             return {"user_id": u["id"]}
     return {"user_id": users_res.data[0]["id"] if users_res.data else "no-user-found"}
+
+@app.get("/api/users")
+async def get_all_users():
+    users_res = supabase.table("users").select("*").execute()
+    return users_res.data

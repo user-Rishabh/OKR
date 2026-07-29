@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Check, Edit2, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface GoalModalProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal, onSave: (goal
   const [isEditing, setIsEditing] = useState(false);
   const [editedGoal, setEditedGoal] = useState<Goal>(goal);
   const [isSaving, setIsSaving] = useState(false);
+  const { session } = useAuth();
 
   const handleSave = async () => {
     if (isEditing) {
@@ -23,7 +25,10 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal, onSave: (goal
       try {
         const res = await fetch('http://localhost:8000/api/goals', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
           body: JSON.stringify({
             user_id: userId,
             cycle: editedGoal.cycle,

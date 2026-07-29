@@ -1,11 +1,12 @@
 import json
 import re
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from groq import Groq
 from ..core.config import settings
 from ..core.supabase_client import supabase
+from ..core.auth import get_current_user
 
 class KeyResultCreate(BaseModel):
     kr_text: str
@@ -45,7 +46,9 @@ class SuggestionResponse(BaseModel):
     suggestions: List[GoalSuggestion]
 
 @router.post("", response_model=dict)
-async def create_goal(goal_data: GoalCreate):
+async def create_goal(goal_data: GoalCreate, current_user: dict = Depends(get_current_user)):
+    if goal_data.user_id != current_user["id"] and current_user["role"] not in ["manager", "admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to create goals for this user")
     goal_insert_data = {
         "user_id": goal_data.user_id,
         "cycle": goal_data.cycle,
@@ -79,16 +82,53 @@ async def create_goal(goal_data: GoalCreate):
     return created_goal
 
 @router.get("")
-async def get_goals(user_id: str):
+async def get_goals(user_id: str, current_user: dict = Depends(get_current_user)):
+    if user_id != current_user["id"] and current_user["role"] not in ["manager", "admin"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view goals for this user")
     goals_res = supabase.table("goals").select("*, key_results(*)").eq("user_id", user_id).order("created_at", desc=True).execute()
     return goals_res.data
 
 @router.delete("/{goal_id}", status_code=204)
-async def delete_goal(goal_id: str):
+async def delete_goal(goal_id: str, current_user: dict = Depends(get_current_user)):
+    # Simple check for demo purposes
+    if current_user["role"] == "employee":
+        # Check if they own the goal
+        goal_res = supabase.table("goals").select("user_id").eq("id", goal_id).execute()
+        if not goal_res.data or goal_res.data[0]["user_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this goal")
     res = supabase.table("goals").delete().eq("id", goal_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Goal not found")
     return None
+
+@router.get("/team")
+async def get_team_goals(team_id: str, current_user: dict = Depends(get_current_user)):
+    requester_role = current_user.get("role")
+    requester_id = current_user.get("id")
+
+    if requester_role not in ["manager", "admin"]:
+        raise HTTPException(status_code=403, detail="Access restricted — this page is only available to managers and admins")
+    
+    # Check if the team exists and if the requester is the manager (defense in depth)
+    team_res = supabase.table("teams").select("*").eq("id", team_id).execute()
+    if not team_res.data:
+        raise HTTPException(status_code=404, detail="Team not found")
+        
+    team = team_res.data[0]
+    # Optionally, restrict if they are a manager but not THIS team's manager, though for demo admin/manager is enough
+    if requester_role == "manager" and team.get("manager_id") != requester_id:
+        raise HTTPException(status_code=403, detail="You are not the manager of this team")
+
+    # Fetch users in the team
+    users_res = supabase.table("users").select("id").eq("team_id", team_id).execute()
+    user_ids = [u["id"] for u in users_res.data]
+    
+    if not user_ids:
+        return []
+        
+    # Fetch goals for those users
+    goals_res = supabase.table("goals").select("*, key_results(*)").in_("user_id", user_ids).order("created_at", desc=True).execute()
+    return goals_res.data
 
 @router.post("/suggest", response_model=List[GoalSuggestion])
 async def suggest_goals(request: SuggestionRequest):

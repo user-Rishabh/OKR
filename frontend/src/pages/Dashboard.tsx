@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Target, Sparkles, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
+import { useAuth } from '../context/AuthContext';
 
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -10,18 +11,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<Record<string, NodeJS.Timeout>>({});
 
+  const { currentUser, session, loading: authLoading } = useAuth();
+
   useEffect(() => {
     const fetchGoals = async () => {
+      if (!currentUser || !session) return;
+      setLoading(true);
       try {
-        const userRes = await fetch('http://localhost:8000/api/users/demo');
-        const userData = await userRes.json();
-        setUserId(userData.user_id);
-        
-        if (userData.user_id !== 'no-user-found') {
-          const goalsRes = await fetch(`http://localhost:8000/api/goals?user_id=${userData.user_id}`);
-          const goalsData = await goalsRes.json();
-          setActiveGoals(goalsData);
-        }
+        const goalsRes = await fetch(`http://localhost:8000/api/goals?user_id=${currentUser.id}`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        const goalsData = await goalsRes.json();
+        setActiveGoals(goalsData);
       } catch (err) {
         console.error("Failed to load dashboard data", err);
       } finally {
@@ -29,7 +32,7 @@ export default function Dashboard() {
       }
     };
     fetchGoals();
-  }, []);
+  }, [currentUser]);
 
   const handleAddGoal = (goal: Goal) => {
     setActiveGoals(prev => [goal, ...prev]);
@@ -54,7 +57,10 @@ export default function Dashboard() {
       try {
         await fetch(`http://localhost:8000/api/key-results/${krId}`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`
+          },
           body: JSON.stringify({ progress_pct: newProgress })
         });
       } catch (err) {
@@ -70,7 +76,10 @@ export default function Dashboard() {
     
     try {
       const res = await fetch(`http://localhost:8000/api/goals/${goalId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`
+        }
       });
       
       if (!res.ok) {
@@ -121,7 +130,7 @@ export default function Dashboard() {
           My Active Goals
         </h2>
         
-        {loading ? (
+        {loading || authLoading ? (
           <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/20 border border-zinc-800 rounded-xl">
             <Loader2 size={32} className="text-blue-500 animate-spin mb-4" />
             <p className="text-zinc-400">Loading goals...</p>
@@ -225,7 +234,7 @@ export default function Dashboard() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSave={handleAddGoal}
-        userId={userId}
+        userId={currentUser?.id || ''}
       />
     </div>
   );

@@ -18,3 +18,11 @@ export interface Goal {
   ai_generated: boolean;
   key_results: KeyResult[];
 }
+
+export interface User {
+  id: string;
+  role: 'employee' | 'manager' | 'admin';
+  job_title: string;
+  department: string;
+  team_id?: string;
+}

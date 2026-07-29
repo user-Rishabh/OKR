@@ -1,6 +1,20 @@
 import React from 'react'
+import { useAuth } from '../context/AuthContext'
+import { AlertCircle } from 'lucide-react'
 
 export default function Team() {
+  const { currentUser } = useAuth()
+
+  if (currentUser && currentUser.role === 'employee') {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-zinc-900/20 border border-zinc-800 rounded-xl mt-8">
+        <AlertCircle size={48} className="text-red-400 mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">Access restricted</h2>
+        <p className="text-zinc-400">This page is only available to managers and admins.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -14,3 +28,4 @@ export default function Team() {
     </div>
   )
 }
+

@@ -1,14 +1,24 @@
 import React from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { supabase } from '../lib/supabase'
+import { LogOut } from 'lucide-react'
 
 export default function Layout() {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { currentUser } = useAuth()
   
   const navItems = [
-    { name: 'Dashboard', path: '/dashboard' },
-    { name: 'Team', path: '/team' },
-    { name: 'Admin', path: '/admin' },
-  ]
+    { name: 'Dashboard', path: '/dashboard', roles: ['employee', 'manager', 'admin'] },
+    { name: 'Team', path: '/team', roles: ['manager', 'admin'] },
+    { name: 'Admin', path: '/admin', roles: ['admin', 'manager'] },
+  ].filter(item => !currentUser || item.roles.includes(currentUser.role))
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    navigate('/login')
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -37,8 +47,15 @@ export default function Layout() {
             </div>
             <div className="flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-medium">
-                U
+                {currentUser?.job_title?.charAt(0) || 'U'}
               </div>
+              <button 
+                onClick={handleSignOut}
+                className="text-zinc-400 hover:text-white p-1.5 rounded-md hover:bg-zinc-800/50 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut size={18} />
+              </button>
             </div>
           </div>
         </div>

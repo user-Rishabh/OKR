@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional
 from ..core.supabase_client import supabase
+from ..core.auth import get_current_user
 
 router = APIRouter(prefix="/api/key-results", tags=["key-results"])
 
@@ -10,7 +11,7 @@ class KeyResultUpdate(BaseModel):
     progress_pct: Optional[float] = None
 
 @router.patch("/{kr_id}")
-async def update_key_result(kr_id: str, update_data: KeyResultUpdate):
+async def update_key_result(kr_id: str, update_data: KeyResultUpdate, current_user: dict = Depends(get_current_user)):
     update_dict = {}
     if update_data.current_value is not None:
         update_dict["current_value"] = update_data.current_value
