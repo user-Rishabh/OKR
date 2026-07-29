@@ -7,16 +7,47 @@ import { useAuth } from '../context/AuthContext';
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
-  const [activeNoteKr, setActiveNoteKr] = useState<{
-    goalId: string;
-    krId: string;
-    newValue: number;
-  } | null>(null);
-  const [noteText, setNoteText] = useState('');
+  const [activeUpdateKrId, setActiveUpdateKrId] = useState<string | null>(null);
+  const [updateText, setUpdateText] = useState("");
+  const [isEstimating, setIsEstimating] = useState(false);
+  const [aiEstimate, setAiEstimate] = useState<{ estimated_progress_pct: number; reasoning: string } | null>(null);
+  const [proposedProgress, setProposedProgress] = useState<number>(0);
+  const [isSavingUpdate, setIsSavingUpdate] = useState(false);
   const [loading, setLoading] = useState(true);
-  const debounceRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const [nudges, setNudges] = useState<Record<string, { text: string; loading: boolean }>>({});
 
   const { currentUser, session, loading: authLoading } = useAuth();
+
+  const handleGetNudge = async (goalId: string) => {
+    setNudges(prev => ({
+      ...prev,
+      [goalId]: { text: '', loading: true }
+    }));
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/goals/${goalId}/checkin`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to fetch check-in nudge');
+      }
+      const data = await res.json();
+      setNudges(prev => ({
+        ...prev,
+        [goalId]: { text: data.nudge_text, loading: false }
+      }));
+    } catch (err) {
+      console.error(err);
+      setNudges(prev => ({
+        ...prev,
+        [goalId]: { text: 'Failed to generate nudge. Please try again.', loading: false }
+      }));
+    }
+  };
 
   useEffect(() => {
     const fetchGoals = async () => {
@@ -43,61 +74,75 @@ export default function Dashboard() {
     setActiveGoals(prev => [goal, ...prev]);
   };
 
-  const submitProgressUpdate = async (krId: string, newValue: number, note?: string) => {
+  const startLogUpdate = (krId: string, currentProgress: number) => {
+    setActiveUpdateKrId(krId);
+    setUpdateText("");
+    setAiEstimate(null);
+    setProposedProgress(currentProgress);
+  };
+
+  const handleGetAiEstimate = async (krId: string) => {
+    if (!updateText.trim()) return;
+    setIsEstimating(true);
+    setAiEstimate(null);
     try {
-      await fetch(`http://localhost:8000/api/key-results/${krId}`, {
-        method: 'PATCH',
-        headers: { 
+      const res = await fetch(`http://localhost:8000/api/key-results/${krId}/estimate-progress`, {
+        method: 'POST',
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`
         },
-        body: JSON.stringify({ 
-          progress_pct: newValue,
-          note: note || undefined
+        body: JSON.stringify({ update_text: updateText })
+      });
+      if (!res.ok) throw new Error('Failed to estimate progress');
+      const data = await res.json();
+      setAiEstimate({
+        estimated_progress_pct: data.estimated_progress_pct,
+        reasoning: data.reasoning
+      });
+      setProposedProgress(data.estimated_progress_pct);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to get AI estimate. You can still set it manually.');
+    } finally {
+      setIsEstimating(false);
+    }
+  };
+
+  const handleSaveUpdate = async (krId: string) => {
+    setIsSavingUpdate(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/key-results/${krId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          progress_pct: proposedProgress,
+          note: updateText,
+          reasoning: aiEstimate?.reasoning || undefined
         })
       });
+      if (!res.ok) throw new Error('Failed to save update');
+      const updatedKr = await res.json();
+      
+      setActiveGoals(prev => prev.map(goal => {
+        const updatedKRs = goal.key_results.map(kr => 
+          kr.id === krId ? { ...kr, progress_pct: updatedKr.progress_pct } : kr
+        );
+        return { ...goal, key_results: updatedKRs };
+      }));
+      
+      setActiveUpdateKrId(null);
+      setUpdateText("");
+      setAiEstimate(null);
     } catch (err) {
-      console.error("Failed to update KR progress", err);
+      console.error(err);
+      alert('Failed to save progress update.');
+    } finally {
+      setIsSavingUpdate(false);
     }
-  };
-
-  const handleSaveNote = () => {
-    if (!activeNoteKr) return;
-    submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue, noteText);
-    setActiveNoteKr(null);
-    setNoteText('');
-  };
-
-  const handleSkipNote = () => {
-    if (!activeNoteKr) return;
-    submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue);
-    setActiveNoteKr(null);
-    setNoteText('');
-  };
-
-  const updateKRProgress = (goalId: string, krId: string, newProgress: number) => {
-    // Optimistic UI update
-    setActiveGoals(prev => prev.map(goal => {
-      if (goal.id !== goalId) return goal;
-      const updatedKRs = goal.key_results.map(kr => 
-        kr.id === krId ? { ...kr, progress_pct: newProgress } : kr
-      );
-      return { ...goal, key_results: updatedKRs };
-    }));
-
-    // Debounced API call / Note UI trigger
-    if (debounceRef.current[krId]) {
-      clearTimeout(debounceRef.current[krId]);
-    }
-    
-    debounceRef.current[krId] = setTimeout(() => {
-      // Auto-submit previous one if user starts updating another KR
-      if (activeNoteKr && activeNoteKr.krId !== krId) {
-        submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue, noteText);
-      }
-      setActiveNoteKr({ goalId, krId, newValue: newProgress });
-      setNoteText('');
-    }, 500);
   };
 
   const handleDeleteGoal = async (goalId: string) => {
@@ -209,6 +254,19 @@ export default function Dashboard() {
                           AI Suggested
                         </div>
                       )}
+                      <button
+                        onClick={() => handleGetNudge(goal.id)}
+                        disabled={nudges[goal.id]?.loading}
+                        className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 bg-purple-400/10 hover:bg-purple-400/20 border border-purple-400/20 px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                        title="Get AI Check-in Nudge"
+                      >
+                        {nudges[goal.id]?.loading ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Sparkles size={12} />
+                        )}
+                        Get AI Check-in
+                      </button>
                       <button 
                         onClick={() => handleDeleteGoal(goal.id)}
                         className="text-zinc-600 hover:text-red-400 hover:bg-red-400/10 p-1.5 rounded transition-colors"
@@ -221,6 +279,35 @@ export default function Dashboard() {
                 </div>
                 
                 <div className="p-5 space-y-5 bg-zinc-950">
+                  {nudges[goal.id] && (
+                    <div className="p-3.5 bg-purple-500/5 border-l-2 border-purple-500 rounded-r-lg flex items-start gap-3 relative animate-in slide-in-from-top duration-200">
+                      <Sparkles size={16} className="text-purple-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-xs text-purple-200 pr-6 leading-relaxed">
+                        {nudges[goal.id].loading ? (
+                          <span className="flex items-center gap-1.5 text-zinc-500">
+                            <Loader2 size={12} className="animate-spin" />
+                            Consulting AI OKR coach...
+                          </span>
+                        ) : (
+                          nudges[goal.id].text
+                        )}
+                      </div>
+                      {!nudges[goal.id].loading && (
+                        <button
+                          onClick={() => {
+                            setNudges(prev => {
+                              const updated = { ...prev };
+                              delete updated[goal.id];
+                              return updated;
+                            });
+                          }}
+                          className="absolute right-2 top-2 text-purple-400/50 hover:text-purple-300 transition-colors"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {goal.key_results.map((kr) => (
                     <div key={kr.id} className="space-y-3">
                       <div className="flex justify-between items-start gap-4">
@@ -243,43 +330,121 @@ export default function Dashboard() {
                             style={{ width: `${kr.progress_pct}%` }}
                           />
                         </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={kr.progress_pct}
-                          onChange={(e) => updateKRProgress(goal.id, kr.id, parseInt(e.target.value))}
-                          className="w-32 accent-blue-500 cursor-pointer"
-                        />
                       </div>
-                      {activeNoteKr?.krId === kr.id && (
-                        <div className="mt-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                          <input
-                            type="text"
-                            placeholder="Add a quick note about this update (optional)"
-                            value={noteText}
-                            onChange={(e) => setNoteText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveNote();
-                              if (e.key === 'Escape') handleSkipNote();
-                            }}
-                            autoFocus
-                            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 placeholder-zinc-600"
-                          />
-                          <div className="flex gap-2 justify-end">
+
+                      {activeUpdateKrId === kr.id ? (
+                        <div className="mt-3 p-4 bg-zinc-900 border border-purple-500/20 rounded-lg space-y-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                              What did you work on?
+                            </label>
+                            <textarea
+                              rows={2}
+                              value={updateText}
+                              onChange={(e) => setUpdateText(e.target.value)}
+                              placeholder="e.g. Completed initial research, setup repository boilerplates"
+                              className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-xs text-white focus:outline-none focus:border-purple-500 placeholder-zinc-600 resize-none"
+                            />
+                          </div>
+
+                          <div className="flex gap-2">
                             <button
-                              onClick={handleSaveNote}
-                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+                              type="button"
+                              onClick={() => handleGetAiEstimate(kr.id)}
+                              disabled={!updateText.trim() || isEstimating}
+                              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-semibold px-3 py-2 rounded-md transition-colors"
                             >
-                              Save
+                              {isEstimating ? (
+                                <>
+                                  <Loader2 size={12} className="animate-spin" />
+                                  Estimating...
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles size={12} />
+                                  Get AI Estimate
+                                </>
+                              )}
                             </button>
                             <button
-                              onClick={handleSkipNote}
-                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+                              type="button"
+                              onClick={() => setActiveUpdateKrId(null)}
+                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold px-3 py-2 rounded-md transition-colors"
                             >
-                              Skip
+                              Cancel
                             </button>
                           </div>
+
+                          {aiEstimate && (
+                            <div className="p-3 bg-purple-500/5 border-l-2 border-purple-500 rounded-r-lg space-y-2 animate-in slide-in-from-top-1 duration-200">
+                              <div className="flex items-start gap-2">
+                                <Sparkles size={14} className="text-purple-400 shrink-0 mt-0.5" />
+                                <div className="flex-1 text-xs text-purple-200">
+                                  <p className="font-semibold text-purple-300">
+                                    AI Estimate: {aiEstimate.estimated_progress_pct}%
+                                  </p>
+                                  <p className="text-[11px] text-purple-400/80 italic mt-0.5 leading-relaxed">
+                                    "{aiEstimate.reasoning}"
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Stepper/Adjustment for final check */}
+                          <div className="space-y-1.5 pt-2 border-t border-zinc-800">
+                            <div className="flex justify-between items-center text-xs">
+                              <span className="font-medium text-zinc-400">Proposed Progress:</span>
+                              <span className="font-bold text-white bg-zinc-800 px-2 py-0.5 rounded">
+                                {proposedProgress}%
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={proposedProgress}
+                                onChange={(e) => setProposedProgress(parseInt(e.target.value))}
+                                className="flex-1 accent-purple-500 cursor-pointer"
+                              />
+                              <div className="flex gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => setProposedProgress(p => Math.max(0, p - 1))}
+                                  className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 font-bold text-xs"
+                                >
+                                  -
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setProposedProgress(p => Math.min(100, p + 1))}
+                                  className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 font-bold text-xs"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 justify-end pt-2">
+                            <button
+                              onClick={() => handleSaveUpdate(kr.id)}
+                              disabled={isSavingUpdate}
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-md transition-colors"
+                            >
+                              {isSavingUpdate ? 'Saving...' : 'Confirm & Save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end pt-1">
+                          <button
+                            onClick={() => startLogUpdate(kr.id, kr.progress_pct)}
+                            className="flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 px-2.5 py-1.5 rounded-md transition-colors font-medium"
+                          >
+                            Log Update
+                          </button>
                         </div>
                       )}
                     </div>

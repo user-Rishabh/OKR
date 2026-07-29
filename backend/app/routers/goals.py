@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime, date
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -100,6 +101,96 @@ async def delete_goal(goal_id: str, current_user: dict = Depends(get_current_use
     if not res.data:
         raise HTTPException(status_code=404, detail="Goal not found")
     return None
+
+def parse_cycle_days(cycle_str: str) -> int:
+    match = re.search(r'Q([1-4])[- ]?(\d{4})', cycle_str, re.IGNORECASE)
+    if not match:
+        return 30
+    
+    q_num = int(match.group(1))
+    year = int(match.group(2))
+    
+    if q_num == 1:
+        end_date = date(year, 3, 31)
+    elif q_num == 2:
+        end_date = date(year, 6, 30)
+    elif q_num == 3:
+        end_date = date(year, 9, 30)
+    else:
+        end_date = date(year, 12, 31)
+        
+    today = date.today()
+    days_left = (end_date - today).days
+    return max(0, days_left)
+
+@router.post("/{goal_id}/checkin")
+async def get_goal_checkin_nudge(goal_id: str, current_user: dict = Depends(get_current_user)):
+    goal_res = supabase.table("goals").select("*, key_results(*)").eq("id", goal_id).execute()
+    if not goal_res.data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    goal = goal_res.data[0]
+
+    owner_id = goal["user_id"]
+    is_authorized = False
+
+    if current_user["id"] == owner_id:
+        is_authorized = True
+    elif current_user["role"] == "admin":
+        is_authorized = True
+    elif current_user["role"] == "manager":
+        owner_res = supabase.table("users").select("team_id").eq("id", owner_id).execute()
+        if owner_res.data:
+            owner_team_id = owner_res.data[0].get("team_id")
+            if owner_team_id:
+                team_res = supabase.table("teams").select("manager_id").eq("id", owner_team_id).execute()
+                if team_res.data and team_res.data[0]["manager_id"] == current_user["id"]:
+                    is_authorized = True
+
+    if not is_authorized:
+        raise HTTPException(status_code=403, detail="Not authorized to access check-in for this goal")
+
+    krs = goal.get("key_results", [])
+    if not krs:
+        avg_progress = 0
+    else:
+        progress_sum = sum(kr.get("progress_pct", 0) for kr in krs)
+        avg_progress = progress_sum / len(krs)
+
+    days_remaining = parse_cycle_days(goal.get("cycle", ""))
+
+    system_prompt = """You are an OKR coaching assistant. Your task is to generate a short, encouraging, or alerting check-in nudge (1 to 2 sentences) for an employee's objective.
+
+Guidance for tone based on progress and time:
+- If the progress is on track (e.g., 50% progress with 45 days left, or >75% progress), use a positive, encouraging tone (praise progress, keep momentum).
+- If the progress is behind schedule (e.g., 10% progress with 30 days left, or 30% progress with 15 days left), use a gentle alert tone that highlights the gap but remains supportive.
+- If days remaining is very low (< 7 days) and progress is low (e.g., < 50%), use an urgent but helpful tone stressing that the cycle is ending soon.
+
+Return ONLY the nudge text. Do not include any quotes, markdown formatting, or preamble."""
+
+    user_prompt = f"""Objective: "{goal.get('objective_text')}"
+Average Key Results Progress: {avg_progress:.1f}%
+Days Remaining in Cycle: {days_remaining} days"""
+
+    try:
+        completion = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=150,
+        )
+        nudge_text = completion.choices[0].message.content.strip()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to generate nudge: {str(e)}")
+
+    return {
+        "nudge_text": nudge_text,
+        "computed_progress_pct": round(avg_progress, 1),
+        "days_remaining": days_remaining
+    }
+
 
 @router.get("/team")
 async def get_team_goals(team_id: str, current_user: dict = Depends(get_current_user)):

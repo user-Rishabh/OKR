@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, AlertCircle, Loader2, ChevronDown, ChevronUp, Clock, Calendar } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader2, ChevronDown, ChevronUp, Clock, Calendar, Sparkles } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 
 interface ProgressLog {
@@ -11,6 +11,7 @@ interface ProgressLog {
   new_value: number;
   note: string | null;
   created_at: string;
+  reasoning?: string | null;
   users?: {
     full_name: string;
   } | null;
@@ -38,6 +39,38 @@ export default function MemberDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedKRs, setExpandedKRs] = useState<Record<string, boolean>>({});
+  const [nudges, setNudges] = useState<Record<string, { text: string; loading: boolean }>>({});
+
+  const handleGetNudge = async (goalId: string) => {
+    setNudges(prev => ({
+      ...prev,
+      [goalId]: { text: '', loading: true }
+    }));
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/goals/${goalId}/checkin`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session?.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) {
+        throw new Error('Failed to fetch check-in nudge');
+      }
+      const data = await res.json();
+      setNudges(prev => ({
+        ...prev,
+        [goalId]: { text: data.nudge_text, loading: false }
+      }));
+    } catch (err) {
+      console.error(err);
+      setNudges(prev => ({
+        ...prev,
+        [goalId]: { text: 'Failed to generate nudge. Please try again.', loading: false }
+      }));
+    }
+  };
 
   useEffect(() => {
     const fetchMemberActivity = async () => {
@@ -161,17 +194,63 @@ export default function MemberDetail() {
               <div key={goal.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden shadow-lg">
                 {/* Goal Info */}
                 <div className="p-5 border-b border-zinc-800 bg-zinc-900/40">
-                  <h3 className="text-lg font-semibold text-white">{goal.objective_text}</h3>
-                  <div className="flex gap-2 mt-2">
-                    <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded uppercase">
-                      {goal.status}
-                    </span>
-                    <span className="text-xs text-zinc-500 font-medium self-center">{goal.cycle}</span>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">{goal.objective_text}</h3>
+                      <div className="flex gap-2 mt-2">
+                        <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-400 border border-green-500/20 rounded uppercase">
+                          {goal.status}
+                        </span>
+                        <span className="text-xs text-zinc-500 font-medium self-center">{goal.cycle}</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleGetNudge(goal.id)}
+                      disabled={nudges[goal.id]?.loading}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 bg-purple-400/10 hover:bg-purple-400/20 border border-purple-400/20 px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 shrink-0"
+                      title="Get AI Check-in Nudge"
+                    >
+                      {nudges[goal.id]?.loading ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Sparkles size={12} />
+                      )}
+                      Get AI Check-in
+                    </button>
                   </div>
                 </div>
 
                 {/* Key Results list */}
                 <div className="p-5 space-y-4 bg-zinc-950/60">
+                  {nudges[goal.id] && (
+                    <div className="p-3.5 bg-purple-500/5 border-l-2 border-purple-500 rounded-r-lg flex items-start gap-3 relative animate-in slide-in-from-top duration-200">
+                      <Sparkles size={16} className="text-purple-400 shrink-0 mt-0.5" />
+                      <div className="flex-1 text-xs text-purple-200 pr-6 leading-relaxed">
+                        {nudges[goal.id].loading ? (
+                          <span className="flex items-center gap-1.5 text-zinc-500">
+                            <Loader2 size={12} className="animate-spin" />
+                            Consulting AI OKR coach...
+                          </span>
+                        ) : (
+                          nudges[goal.id].text
+                        )}
+                      </div>
+                      {!nudges[goal.id].loading && (
+                        <button
+                          onClick={() => {
+                            setNudges(prev => {
+                              const updated = { ...prev };
+                              delete updated[goal.id];
+                              return updated;
+                            });
+                          }}
+                          className="absolute right-2 top-2 text-purple-400/50 hover:text-purple-300 transition-colors"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {goal.key_results.map(kr => {
                     const isExpanded = !!expandedKRs[kr.id];
                     return (
@@ -235,6 +314,14 @@ export default function MemberDetail() {
                                         <p className="text-zinc-300 italic bg-zinc-900/30 p-2 border-l-2 border-blue-500/50 rounded-r-md mt-1 pl-3 text-xs leading-relaxed max-w-lg">
                                           "{log.note}"
                                         </p>
+                                      )}
+                                      {log.reasoning && (
+                                        <div className="flex items-center gap-1.5 text-[11px] text-purple-400 bg-purple-500/5 border border-purple-500/10 rounded px-2.5 py-1.5 mt-1.5 max-w-lg leading-relaxed">
+                                          <Sparkles size={11} className="shrink-0" />
+                                          <span>
+                                            <span className="font-semibold text-purple-300">AI Interpretation:</span> {log.reasoning}
+                                          </span>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
