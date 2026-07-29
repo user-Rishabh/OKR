@@ -21,6 +21,7 @@ export interface Goal {
 
 export interface User {
   id: string;
+  full_name: string;
   role: 'employee' | 'manager' | 'admin';
   job_title: string;
   department: string;

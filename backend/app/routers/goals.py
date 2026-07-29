@@ -115,20 +115,12 @@ async def get_team_goals(team_id: str, current_user: dict = Depends(get_current_
         raise HTTPException(status_code=404, detail="Team not found")
         
     team = team_res.data[0]
-    # Optionally, restrict if they are a manager but not THIS team's manager, though for demo admin/manager is enough
     if requester_role == "manager" and team.get("manager_id") != requester_id:
         raise HTTPException(status_code=403, detail="You are not the manager of this team")
 
-    # Fetch users in the team
-    users_res = supabase.table("users").select("id").eq("team_id", team_id).execute()
-    user_ids = [u["id"] for u in users_res.data]
-    
-    if not user_ids:
-        return []
-        
-    # Fetch goals for those users
-    goals_res = supabase.table("goals").select("*, key_results(*)").in_("user_id", user_ids).order("created_at", desc=True).execute()
-    return goals_res.data
+    # Fetch users in the team with their goals and key results
+    res = supabase.table("users").select("*, goals(*, key_results(*))").eq("team_id", team_id).execute()
+    return res.data
 
 @router.post("/suggest", response_model=List[GoalSuggestion])
 async def suggest_goals(request: SuggestionRequest):

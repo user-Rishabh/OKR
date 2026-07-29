@@ -7,7 +7,12 @@ import { useAuth } from '../context/AuthContext';
 export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
-  const [userId, setUserId] = useState<string>('');
+  const [activeNoteKr, setActiveNoteKr] = useState<{
+    goalId: string;
+    krId: string;
+    newValue: number;
+  } | null>(null);
+  const [noteText, setNoteText] = useState('');
   const [loading, setLoading] = useState(true);
   const debounceRef = useRef<Record<string, NodeJS.Timeout>>({});
 
@@ -38,6 +43,38 @@ export default function Dashboard() {
     setActiveGoals(prev => [goal, ...prev]);
   };
 
+  const submitProgressUpdate = async (krId: string, newValue: number, note?: string) => {
+    try {
+      await fetch(`http://localhost:8000/api/key-results/${krId}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ 
+          progress_pct: newValue,
+          note: note || undefined
+        })
+      });
+    } catch (err) {
+      console.error("Failed to update KR progress", err);
+    }
+  };
+
+  const handleSaveNote = () => {
+    if (!activeNoteKr) return;
+    submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue, noteText);
+    setActiveNoteKr(null);
+    setNoteText('');
+  };
+
+  const handleSkipNote = () => {
+    if (!activeNoteKr) return;
+    submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue);
+    setActiveNoteKr(null);
+    setNoteText('');
+  };
+
   const updateKRProgress = (goalId: string, krId: string, newProgress: number) => {
     // Optimistic UI update
     setActiveGoals(prev => prev.map(goal => {
@@ -48,24 +85,18 @@ export default function Dashboard() {
       return { ...goal, key_results: updatedKRs };
     }));
 
-    // Debounced API call
+    // Debounced API call / Note UI trigger
     if (debounceRef.current[krId]) {
       clearTimeout(debounceRef.current[krId]);
     }
     
-    debounceRef.current[krId] = setTimeout(async () => {
-      try {
-        await fetch(`http://localhost:8000/api/key-results/${krId}`, {
-          method: 'PATCH',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${session?.access_token}`
-          },
-          body: JSON.stringify({ progress_pct: newProgress })
-        });
-      } catch (err) {
-        console.error("Failed to update KR progress", err);
+    debounceRef.current[krId] = setTimeout(() => {
+      // Auto-submit previous one if user starts updating another KR
+      if (activeNoteKr && activeNoteKr.krId !== krId) {
+        submitProgressUpdate(activeNoteKr.krId, activeNoteKr.newValue, noteText);
       }
+      setActiveNoteKr({ goalId, krId, newValue: newProgress });
+      setNoteText('');
     }, 500);
   };
 
@@ -221,6 +252,36 @@ export default function Dashboard() {
                           className="w-32 accent-blue-500 cursor-pointer"
                         />
                       </div>
+                      {activeNoteKr?.krId === kr.id && (
+                        <div className="mt-3 p-3 bg-zinc-900 border border-zinc-800 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                          <input
+                            type="text"
+                            placeholder="Add a quick note about this update (optional)"
+                            value={noteText}
+                            onChange={(e) => setNoteText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveNote();
+                              if (e.key === 'Escape') handleSkipNote();
+                            }}
+                            autoFocus
+                            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 placeholder-zinc-600"
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={handleSaveNote}
+                              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={handleSkipNote}
+                              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-semibold px-3 py-1.5 rounded-md transition-colors"
+                            >
+                              Skip
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

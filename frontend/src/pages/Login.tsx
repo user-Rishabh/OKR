@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Target, Loader2, AlertCircle } from 'lucide-react';
@@ -95,6 +95,13 @@ export default function Login() {
             {loading ? <Loader2 className="animate-spin" size={20} /> : 'Sign In'}
           </button>
         </form>
+
+        <p className="text-zinc-500 text-sm text-center mt-6">
+          Don't have an account?{' '}
+          <Link to="/signup" className="text-blue-400 hover:underline">
+            Sign up
+          </Link>
+        </p>
       </div>
     </div>
   );

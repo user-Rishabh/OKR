@@ -47,7 +47,7 @@ export default function Layout() {
             </div>
             <div className="flex items-center gap-4">
               <div className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-sm font-medium">
-                {currentUser?.job_title?.charAt(0) || 'U'}
+                {currentUser?.full_name?.charAt(0) || 'U'}
               </div>
               <button 
                 onClick={handleSignOut}
