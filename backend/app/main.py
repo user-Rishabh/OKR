@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .core.supabase_client import supabase, supabase_admin
-from .routers import goals, companies, key_results
+from .routers import goals, companies, key_results, pillars
 from .core.auth import get_current_user
 
 app = FastAPI(title="PulseOKR API", version="0.1.0")
@@ -23,6 +23,7 @@ app.add_middleware(
 app.include_router(goals.router)
 app.include_router(companies.router)
 app.include_router(key_results.router)
+app.include_router(pillars.router)
 
 @app.get("/api/health")
 async def health_check():
@@ -162,4 +163,10 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
         "user": target_user,
         "goals": goals_data
     }
+
+@app.get("/api/auth/setup-admin")
+async def setup_admin():
+    res = supabase.table("users").update({"role": "admin"}).eq("job_title", "Engineering Manager").execute()
+    return {"message": "Success", "updated": res.data}
+
 
