@@ -315,3 +315,308 @@ Expected JSON schema:
             if attempt == max_retries:
                 raise HTTPException(status_code=502, detail=f"Failed to generate valid goals after retries. Last error: {str(e)}")
             continue
+
+class AlignmentCheckRequest(BaseModel):
+    team_id: str
+
+class AlignmentFlagResponse(BaseModel):
+    id: str
+    goal_id_a: str
+    goal_id_b: str
+    reason: str
+    created_at: str
+    employee_name_a: str
+    employee_name_b: str
+    objective_text_a: str
+    objective_text_b: str
+
+class AIAlignmentFlag(BaseModel):
+    goal_id_a: str
+    goal_id_b: str
+    reason: str
+
+@router.post("/check-alignment", response_model=List[AlignmentFlagResponse])
+async def check_goals_alignment(payload: AlignmentCheckRequest, current_user: dict = Depends(get_current_user)):
+    team_id = payload.team_id
+    requester_role = current_user.get("role")
+    requester_id = current_user.get("id")
+
+    if requester_role not in ["manager", "admin"]:
+        raise HTTPException(status_code=403, detail="Access restricted — this endpoint is only available to managers and admins")
+        
+    # Check if the team exists
+    team_res = supabase.table("teams").select("*").eq("id", team_id).execute()
+    if not team_res.data:
+        raise HTTPException(status_code=404, detail="Team not found")
+        
+    team = team_res.data[0]
+    if requester_role == "manager" and team.get("manager_id") != requester_id:
+        raise HTTPException(status_code=403, detail="You are not the manager of this team")
+
+    # Fetch team members
+    users_res = supabase.table("users").select("id, full_name").eq("team_id", team_id).execute()
+    if not users_res.data:
+        return []
+        
+    user_ids = [u["id"] for u in users_res.data]
+    users_map = {u["id"]: u["full_name"] for u in users_res.data}
+    
+    # Fetch all goals for users in the team (needed for resolving flags)
+    all_goals_res = supabase.table("goals").select("id, user_id, objective_text, status").in_("user_id", user_ids).execute()
+    goals_map = {g["id"]: g for g in all_goals_res.data}
+    
+    # Identify active goals to run check on
+    active_goals = [g for g in all_goals_res.data if g["status"] == "active"]
+    
+    # Fetch all existing flags to clean up database duplicates (self-healing)
+    flags_res = supabase.table("alignment_flags").select("*").execute()
+    
+    # Identify duplicates database-wide
+    seen_global = set()
+    duplicates_to_delete = []
+    for f in flags_res.data:
+        g_a = f["goal_id_a"]
+        g_b = f["goal_id_b"]
+        pair = (g_a, g_b) if g_a < g_b else (g_b, g_a)
+        if pair in seen_global:
+            duplicates_to_delete.append(f["id"])
+        else:
+            seen_global.add(pair)
+            
+    # Delete duplicates from database
+    for flag_id in duplicates_to_delete:
+        try:
+            supabase.table("alignment_flags").delete().eq("id", flag_id).execute()
+        except Exception as delete_err:
+            print(f"Failed to delete duplicate flag {flag_id}: {delete_err}")
+            
+    # Filter to get team-specific, clean existing flags
+    clean_flags = [f for f in flags_res.data if f["id"] not in duplicates_to_delete]
+    existing_flags = [
+        f for f in clean_flags
+        if f["goal_id_a"] in goals_map and f["goal_id_b"] in goals_map
+    ]
+        
+    existing_pairs = set()
+    for f in existing_flags:
+        g_a = f["goal_id_a"]
+        g_b = f["goal_id_b"]
+        pair = (g_a, g_b) if g_a < g_b else (g_b, g_a)
+        existing_pairs.add(pair)
+        
+    if len(active_goals) >= 2:
+        # Prepare goals list for prompt
+        goals_payload = []
+        for g in active_goals:
+            goals_payload.append({
+                "id": g["id"],
+                "user_name": users_map.get(g["user_id"], "Unknown"),
+                "objective_text": g["objective_text"]
+            })
+            
+        # Construct prompt
+        system_prompt = (
+            "You are an expert OKR coach and database analyst. Your task is to analyze a list of active goals (Objectives) for a team and identify pairs of goals that have genuine semantic overlaps or are duplicates.\n\n"
+            "Definition of Overlap/Duplicate:\n"
+            "- The two goals are substantively working on the same thing or have significant redundancy.\n"
+            "- Example of OVERLAP: \"Improve API response time\" and \"Reduce backend latency\" (both target backend performance/speed).\n"
+            "- Example of NOT AN OVERLAP: \"Improve API response time\" and \"Improve frontend load time\" (one is backend API, the other is frontend UI performance; different scopes and implementation teams).\n"
+            "- Example of NOT AN OVERLAP: \"Increase sales by 10%\" and \"Hire 2 new sales reps\" (one is an outcome goal, the other is a hiring target; they are related but not duplicates).\n\n"
+            "Input Format:\n"
+            "A JSON list of goals, where each goal has:\n"
+            "- id: The unique identifier of the goal (UUID).\n"
+            "- user_name: The name of the employee who owns the goal.\n"
+            "- objective_text: The statement of the objective.\n\n"
+            "Output Format:\n"
+            "You must identify and return any overlapping/duplicate goal pairs.\n"
+            "To ensure consistency, always order the pair so that goal_id_a comes lexicographically before goal_id_b.\n"
+            "Return a JSON object containing a list of overlapping pairs under the key \"overlaps\".\n"
+            "Expected JSON schema:\n"
+            "{\n"
+            "  \"overlaps\": [\n"
+            "    {\n"
+            "      \"goal_id_a\": \"<UUID of goal A>\",\n"
+            "      \"goal_id_b\": \"<UUID of goal B>\",\n"
+            "      \"reason\": \"<A clear explanation of why these goals overlap and what can be done to align or consolidate them>\"\n"
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "If no overlapping pairs are found, return:\n"
+            "{\n"
+            "  \"overlaps\": []\n"
+            "}\n\n"
+            "Rules:\n"
+            "1. Do not flag goals that just share common terms (like \"improve\", \"increase\", etc.) but address entirely different areas.\n"
+            "2. Only flag goals that are substantively redundant or overlapping.\n"
+            "3. You MUST return ONLY valid JSON. No markdown code blocks, no preamble, no explanations."
+        )
+        
+        user_prompt = f"Here is the list of active team goals to analyze:\n{json.dumps(goals_payload, indent=2)}"
+        
+        try:
+            completion = groq_client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.0,
+                max_tokens=1024,
+            )
+            raw_content = completion.choices[0].message.content.strip()
+            
+            # Clean JSON formatting
+            if raw_content.startswith("```json"):
+                raw_content = raw_content.replace("```json", "", 1)
+            if raw_content.endswith("```"):
+                raw_content = raw_content.rsplit("```", 1)[0]
+            raw_content = raw_content.strip()
+            
+            ai_data = json.loads(raw_content)
+            overlaps = ai_data.get("overlaps", [])
+            
+            # Validate with Pydantic
+            validated_overlaps = []
+            for item in overlaps:
+                try:
+                    flag = AIAlignmentFlag(
+                        goal_id_a=item["goal_id_a"],
+                        goal_id_b=item["goal_id_b"],
+                        reason=item["reason"]
+                    )
+                    validated_overlaps.append(flag)
+                except Exception as ve:
+                    print(f"Skipping invalid AI overlap item: {item}. Error: {ve}")
+                    
+            # Insert new flags
+            new_inserted_flags = []
+            for flag in validated_overlaps:
+                g_a = flag.goal_id_a
+                g_b = flag.goal_id_b
+                reason = flag.reason
+                
+                # Check if these goals exist in the team goals to avoid hallucinations
+                if g_a not in goals_map or g_b not in goals_map:
+                    continue
+                    
+                # Normalize order
+                normalized_pair = (g_a, g_b) if g_a < g_b else (g_b, g_a)
+                
+                if normalized_pair not in existing_pairs:
+                    # Insert into DB
+                    insert_payload = {
+                        "goal_id_a": normalized_pair[0],
+                        "goal_id_b": normalized_pair[1],
+                        "reason": reason
+                    }
+                    insert_res = supabase.table("alignment_flags").insert(insert_payload).execute()
+                    if insert_res.data:
+                        new_flag = insert_res.data[0]
+                        new_inserted_flags.append(new_flag)
+                        existing_pairs.add(normalized_pair)
+                        
+            # Add newly inserted flags to our existing_flags list
+            existing_flags.extend(new_inserted_flags)
+            
+        except Exception as e:
+            raise HTTPException(status_code=502, detail=f"AI alignment check failed: {str(e)}")
+            
+    # Resolve details for existing_flags
+    resolved = []
+    for f in existing_flags:
+        g_a = goals_map.get(f["goal_id_a"])
+        g_b = goals_map.get(f["goal_id_b"])
+        if not g_a or not g_b:
+            continue
+        resolved.append({
+            "id": f["id"],
+            "goal_id_a": f["goal_id_a"],
+            "goal_id_b": f["goal_id_b"],
+            "reason": f["reason"],
+            "created_at": f["created_at"],
+            "employee_name_a": users_map.get(g_a["user_id"], "Unknown"),
+            "employee_name_b": users_map.get(g_b["user_id"], "Unknown"),
+            "objective_text_a": g_a["objective_text"],
+            "objective_text_b": g_b["objective_text"]
+        })
+        
+    return resolved
+
+@router.get("/alignment-flags", response_model=List[AlignmentFlagResponse])
+async def get_team_alignment_flags(team_id: str, current_user: dict = Depends(get_current_user)):
+    requester_role = current_user.get("role")
+    requester_id = current_user.get("id")
+
+    if requester_role not in ["manager", "admin"]:
+        raise HTTPException(status_code=403, detail="Access restricted — this endpoint is only available to managers and admins")
+        
+    # Check if the team exists
+    team_res = supabase.table("teams").select("*").eq("id", team_id).execute()
+    if not team_res.data:
+        raise HTTPException(status_code=404, detail="Team not found")
+        
+    team = team_res.data[0]
+    if requester_role == "manager" and team.get("manager_id") != requester_id:
+        raise HTTPException(status_code=403, detail="You are not the manager of this team")
+
+    # Fetch team members
+    users_res = supabase.table("users").select("id, full_name").eq("team_id", team_id).execute()
+    if not users_res.data:
+        return []
+        
+    user_ids = [u["id"] for u in users_res.data]
+    users_map = {u["id"]: u["full_name"] for u in users_res.data}
+    
+    # Fetch all goals for users in the team
+    all_goals_res = supabase.table("goals").select("id, user_id, objective_text, status").in_("user_id", user_ids).execute()
+    goals_map = {g["id"]: g for g in all_goals_res.data}
+    
+    # Fetch all existing flags to clean up database duplicates (self-healing)
+    flags_res = supabase.table("alignment_flags").select("*").execute()
+    
+    # Identify duplicates database-wide
+    seen_global = set()
+    duplicates_to_delete = []
+    for f in flags_res.data:
+        g_a = f["goal_id_a"]
+        g_b = f["goal_id_b"]
+        pair = (g_a, g_b) if g_a < g_b else (g_b, g_a)
+        if pair in seen_global:
+            duplicates_to_delete.append(f["id"])
+        else:
+            seen_global.add(pair)
+            
+    # Delete duplicates from database
+    for flag_id in duplicates_to_delete:
+        try:
+            supabase.table("alignment_flags").delete().eq("id", flag_id).execute()
+        except Exception as delete_err:
+            print(f"Failed to delete duplicate flag {flag_id}: {delete_err}")
+            
+    # Filter to get team-specific, clean existing flags
+    clean_flags = [f for f in flags_res.data if f["id"] not in duplicates_to_delete]
+    existing_flags = [
+        f for f in clean_flags
+        if f["goal_id_a"] in goals_map and f["goal_id_b"] in goals_map
+    ]
+        
+    # Resolve details
+    resolved = []
+    for f in existing_flags:
+        g_a = goals_map.get(f["goal_id_a"])
+        g_b = goals_map.get(f["goal_id_b"])
+        if not g_a or not g_b:
+            continue
+        resolved.append({
+            "id": f["id"],
+            "goal_id_a": f["goal_id_a"],
+            "goal_id_b": f["goal_id_b"],
+            "reason": f["reason"],
+            "created_at": f["created_at"],
+            "employee_name_a": users_map.get(g_a["user_id"], "Unknown"),
+            "employee_name_b": users_map.get(g_b["user_id"], "Unknown"),
+            "objective_text_a": g_a["objective_text"],
+            "objective_text_b": g_b["objective_text"]
+        })
+        
+    return resolved

@@ -41,12 +41,17 @@ export default function Dashboard() {
         const res = await fetch(`http://localhost:8000/api/goals?user_id=${currentUser.id}`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
-        setActiveGoals(await res.json());
+        if (!res.ok) {
+          console.error(`Failed to fetch goals: ${res.status} ${res.statusText}`);
+          return;
+        }
+        const data = await res.json();
+        setActiveGoals(Array.isArray(data) ? data : []);
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     };
     fetchGoals();
-  }, [currentUser]);
+  }, [currentUser, session]);
 
   /* ─── stats ────────────────────────────────────────────────── */
   const averageProgress = (() => {

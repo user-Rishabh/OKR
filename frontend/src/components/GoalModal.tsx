@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Check, Edit2, Sparkles, Loader2, AlertCircle } from 'lucide-react';
 import type { Goal } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -11,13 +12,10 @@ interface GoalModalProps {
 }
 
 function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: Goal) => void; userId: string }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedGoal, setEditedGoal] = useState<Goal>(goal);
   const [isSaving, setIsSaving] = useState(false);
   const { session } = useAuth();
 
   const handleSave = async () => {
-    if (isEditing) { setIsEditing(false); return; }
     setIsSaving(true);
     try {
       const res = await fetch('http://localhost:8000/api/goals', {
@@ -25,11 +23,11 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: G
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({
           user_id: userId,
-          cycle: editedGoal.cycle,
-          objective_text: editedGoal.objective_text,
+          cycle: goal.cycle,
+          objective_text: goal.objective_text,
           pillar_id: null,
-          ai_generated: editedGoal.ai_generated,
-          key_results: editedGoal.key_results.map(kr => ({
+          ai_generated: goal.ai_generated,
+          key_results: goal.key_results.map(kr => ({
             kr_text: kr.kr_text,
             target_value: kr.target_value ? Number(kr.target_value) : null,
             unit: kr.unit || null,
@@ -43,53 +41,27 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: G
     finally { setIsSaving(false); }
   };
 
-  const updateKR = (i: number, text: string) => {
-    const krs = [...editedGoal.key_results];
-    krs[i].kr_text = text;
-    setEditedGoal({ ...editedGoal, key_results: krs });
-  };
-
   return (
     <div className="card card-top-blue p-5 space-y-4">
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1">
-          {isEditing ? (
-            <input
-              type="text" value={editedGoal.objective_text}
-              onChange={e => setEditedGoal({ ...editedGoal, objective_text: e.target.value })}
-              className="w-full px-3 py-2 text-sm"
-            />
-          ) : (
-            <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{editedGoal.objective_text}</h4>
-          )}
+          <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{goal.objective_text}</h4>
           <span className="pill-blue mt-2 inline-flex">
-            {editedGoal.pillar_title || 'No Pillar'}
+            {goal.pillar_title || 'No Pillar'}
           </span>
         </div>
-        {!isEditing && (
-          <button onClick={() => setIsEditing(true)} className="p-1.5 rounded-lg transition-colors cursor-pointer" style={{ color: '#6B6558' }}>
-            <Edit2 size={15} />
-          </button>
-        )}
       </div>
 
       <div className="space-y-2">
         <p className="text-xs font-bold uppercase tracking-wider" style={{ color: '#6B6558' }}>Key Results</p>
         <ul className="space-y-2">
-          {editedGoal.key_results.map((kr, idx) => (
+          {goal.key_results.map((kr) => (
             <li key={kr.id} className="flex items-start gap-2 text-sm">
               <span className="mt-1 flex-shrink-0" style={{ color: '#F2994A' }}>•</span>
-              {isEditing ? (
-                <div className="flex-1">
-                  <input type="text" value={kr.kr_text} onChange={e => updateKR(idx, e.target.value)} className="w-full px-2 py-1 text-sm" />
-                  {kr.suggested_metric && <span className="text-xs block mt-0.5" style={{ color: '#6B6558' }}>Metric: {kr.suggested_metric}</span>}
-                </div>
-              ) : (
-                <div className="flex-1">
-                  <span style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
-                  {kr.suggested_metric && <span className="text-xs block mt-0.5" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</span>}
-                </div>
-              )}
+              <div className="flex-1">
+                <span style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
+                {kr.suggested_metric && <span className="text-xs block mt-0.5" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</span>}
+              </div>
             </li>
           ))}
         </ul>
@@ -98,7 +70,7 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: G
       <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
         <button onClick={handleSave} disabled={isSaving} className="gradient-button flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold cursor-pointer">
           {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
-          {isEditing ? 'Done Editing' : <><Check size={15} />Accept &amp; Save</>}
+          <Check size={15} />Accept &amp; Save
         </button>
       </div>
     </div>
@@ -106,10 +78,21 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: G
 }
 
 export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModalProps) {
+  const { currentUser } = useAuth();
   const [step, setStep] = useState<'form' | 'loading' | 'suggestions'>('form');
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({ job_title: '', department: '', focus_area: '' });
   const [suggestions, setSuggestions] = useState<Goal[]>([]);
+
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        job_title: prev.job_title || currentUser.job_title || '',
+        department: prev.department || currentUser.department || '',
+      }));
+    }
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -154,7 +137,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
 
   const inputCls = "w-full px-4 py-2.5 text-sm rounded-xl";
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
       <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-stagger-1"
@@ -173,7 +156,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-5">
+        <div className="p-6 flex-1 min-h-0 overflow-y-auto space-y-5">
           {step === 'loading' && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ background: 'linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1))' }}>
@@ -206,6 +189,34 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>Focus Area</label>
                 <textarea required rows={4} placeholder="e.g. Improve backend performance..." className="w-full px-4 py-2.5 text-sm rounded-xl resize-none"
                   value={formData.focus_area} onChange={e => setFormData({ ...formData, focus_area: e.target.value })} />
+                
+                {/* Suggestions Pills */}
+                <div className="mt-2.5 space-y-1.5">
+                  <span className="text-xs font-semibold" style={{ color: '#6B6558' }}>Quick Suggestions:</span>
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {[
+                      "Improve API latency & backend speed",
+                      "Optimize database & cloud resource usage",
+                      "Increase automated test coverage",
+                      "Accelerate onboarding & documentation",
+                      "Improve support response time"
+                    ].map((pill, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, focus_area: pill })}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer hover:border-brand-amber hover:text-brand-orange"
+                        style={{
+                          background: formData.focus_area === pill ? 'linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1))' : '#F7F4EE',
+                          borderColor: formData.focus_area === pill ? '#F2994A' : '#E8E2D6',
+                          color: formData.focus_area === pill ? '#B5651D' : '#6B6558'
+                        }}
+                      >
+                        {pill}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
               <button type="submit" className="w-full gradient-button font-bold py-3 rounded-xl flex items-center justify-center gap-2 cursor-pointer">
                 <Sparkles size={18} />Suggest Goals
@@ -222,6 +233,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
