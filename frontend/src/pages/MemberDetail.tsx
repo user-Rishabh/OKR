@@ -81,7 +81,7 @@ export default function MemberDetail() {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center p-14 mt-8">
-      <Loader2 size={32} style={{ color: '#F2994A' }} className="animate-spin mb-4" />
+      <Loader2 size={32} style={{ color: '#3B4B6B' }} className="animate-spin mb-4" />
       <p className="text-sm" style={{ color: '#6B6558' }}>Loading activity timeline...</p>
     </div>
   );
@@ -105,7 +105,7 @@ export default function MemberDetail() {
       {/* Back + Header */}
       <div className="space-y-4 animate-stagger-2">
         <Link to="/team" className="inline-flex items-center gap-2 text-sm font-medium transition-colors" style={{ color: '#6B6558' }}
-          onMouseOver={e => e.currentTarget.style.color = '#B5651D'}
+          onMouseOver={e => e.currentTarget.style.color = '#3B4B6B'}
           onMouseOut={e => e.currentTarget.style.color = '#6B6558'}
         >
           <ArrowLeft size={16} /> Back to Team
@@ -157,7 +157,7 @@ export default function MemberDetail() {
                         onClick={() => handleGetNudge(goal.id)}
                         disabled={nudges[goal.id]?.loading}
                         className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border cursor-pointer transition-all shrink-0"
-                        style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA' }}
+                        style={{ background: '#EEF1F7', color: '#3B4B6B', border: '1px solid #D4DAE6' }}
                       >
                         {nudges[goal.id]?.loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
                         AI Check-in
@@ -168,8 +168,8 @@ export default function MemberDetail() {
                   {/* KRs */}
                   <div className="p-6 space-y-4" style={{ background: '#FAFAF8' }}>
                     {nudges[goal.id] && (
-                      <div className="p-4 rounded-xl flex items-start gap-3 relative" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
-                        <Sparkles size={15} style={{ color: '#F2994A', flexShrink: 0 }} />
+                      <div className="p-4 rounded-xl flex items-start gap-3 relative" style={{ background: '#EEF1F7', border: '1px solid #D4DAE6' }}>
+                        <Sparkles size={15} style={{ color: '#3B4B6B', flexShrink: 0 }} />
                         <div className="flex-1 text-xs leading-relaxed" style={{ color: '#1A1A1A' }}>
                           {nudges[goal.id].loading
                             ? <span className="flex items-center gap-1.5" style={{ color: '#6B6558' }}><Loader2 size={12} className="animate-spin" />Consulting AI OKR coach...</span>
@@ -207,7 +207,7 @@ export default function MemberDetail() {
                                 <div className="relative pl-6 space-y-5" style={{ borderLeft: '2px solid #E8E2D6' }}>
                                   {kr.progress_logs.map(log => (
                                     <div key={log.id} className="relative">
-                                      <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: '#F2994A', border: '2px solid #FFFFFF' }} />
+                                      <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: '#3B4B6B', border: '2px solid #FFFFFF' }} />
                                       <div className="text-xs space-y-1.5">
                                         <div className="flex flex-wrap items-center gap-2" style={{ color: '#6B6558' }}>
                                           <span className="flex items-center gap-1 font-semibold font-mono">
@@ -216,7 +216,7 @@ export default function MemberDetail() {
                                           <span>·</span>
                                           <span>by <span className="font-bold" style={{ color: '#1A1A1A' }}>{log.users?.full_name || 'System'}</span></span>
                                           <span>·</span>
-                                          <span className="font-mono font-bold px-2 py-0.5 rounded-md" style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA' }}>
+                                          <span className="font-mono font-bold px-2 py-0.5 rounded-md" style={{ background: '#EEF1F7', color: '#3B4B6B', border: '1px solid #D4DAE6' }}>
                                             {log.previous_value}% → {log.new_value}%
                                           </span>
                                         </div>

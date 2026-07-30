@@ -30,7 +30,7 @@ export default function Login() {
         <div className="card p-8 card-top-orange">
           {/* Header */}
           <div className="flex flex-col items-center mb-8 animate-stagger-2">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-md" style={{ background: 'linear-gradient(135deg, #F2994A, #B5651D)' }}>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-5 shadow-md" style={{ background: 'linear-gradient(135deg, #3B4B6B, #5C7299)' }}>
               <Target size={28} color="white" />
             </div>
             <h1 className="text-3xl text-center" style={{ fontSize: '28px' }}>

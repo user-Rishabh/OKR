@@ -41,6 +41,12 @@ export default function Team() {
   const [alignmentError, setAlignmentError] = useState<string | null>(null);
   const [loadingFlags, setLoadingFlags] = useState(true);
 
+  // Profile Change Requests States (for manager review)
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchTeamData = async () => {
       if (!currentUser || !session || !currentUser.team_id) { setLoading(false); return; }
@@ -71,14 +77,67 @@ export default function Team() {
       }
     };
 
+    const fetchPendingRequests = async () => {
+      if (!currentUser || !session || currentUser.role !== 'manager') return;
+      try {
+        const res = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setPendingRequests(data);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
     if (currentUser && currentUser.role !== 'employee') {
       fetchTeamData();
       fetchFlags();
+      if (currentUser.role === 'manager') {
+        fetchPendingRequests();
+      }
     } else {
       setLoading(false);
       setLoadingFlags(false);
     }
   }, [currentUser, session]);
+
+  const handleReviewRequest = async (reqId: string, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/profile/change-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          status,
+          reviewer_note: status === 'rejected' && rejectNote.trim() ? rejectNote : undefined
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to review request');
+      }
+      setReviewMessage(`Request successfully ${status}!`);
+      setTimeout(() => setReviewMessage(null), 3000);
+      setRejectingRequestId(null);
+      setRejectNote('');
+      
+      // Refresh list
+      const requestsRes = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      });
+      if (requestsRes.ok) {
+        const data = await requestsRes.json();
+        setPendingRequests(data);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   const runAlignmentCheck = async () => {
     if (!currentUser || !session || !currentUser.team_id) return;
@@ -145,12 +204,12 @@ export default function Team() {
       </div>
 
       {/* Alignment Check Section */}
-      <div className="card overflow-hidden animate-stagger-2" style={{ borderTop: '4px solid #F2994A' }}>
+      <div className="card overflow-hidden animate-stagger-2" style={{ borderTop: '4px solid #3B4B6B' }}>
         <div className="p-6" style={{ borderBottom: '1px solid #E8E2D6' }}>
           <div className="flex justify-between items-center flex-wrap gap-4">
             <div>
               <h2 className="text-xl font-bold flex items-center gap-2" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
-                <Sparkles size={20} style={{ color: '#F2994A' }} />
+                <Sparkles size={20} style={{ color: '#3B4B6B' }} />
                 Alignment Check
               </h2>
               <p className="text-sm mt-1" style={{ color: '#6B6558' }}>
@@ -186,7 +245,7 @@ export default function Team() {
         <div className="p-6" style={{ background: '#FAFAF8' }}>
           {loadingFlags ? (
             <div className="flex justify-center items-center py-6">
-              <RefreshCw size={24} className="animate-spin" style={{ color: '#F2994A' }} />
+              <RefreshCw size={24} className="animate-spin" style={{ color: '#3B4B6B' }} />
             </div>
           ) : flags.length === 0 ? (
             <div className="rounded-xl p-6 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left justify-between" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
@@ -204,12 +263,12 @@ export default function Team() {
           ) : (
             <div className="space-y-4">
               {flags.map((flag) => (
-                <div key={flag.id} className="card p-5 space-y-4" style={{ borderLeft: '4px solid #F2994A' }}>
+                <div key={flag.id} className="card p-5 space-y-4" style={{ borderLeft: '4px solid #3B4B6B' }}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
                     {/* Left Goal */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ background: '#FFF7ED', color: '#C2410C' }}>Employee A</span>
+                        <span className="font-semibold text-xs uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ background: '#EEF1F7', color: '#7C93BD' }}>Employee A</span>
                         <h5 className="font-bold text-sm" style={{ color: '#1A1A1A' }}>{flag.employee_name_a}</h5>
                       </div>
                       <p className="text-sm font-medium p-3.5 rounded-xl italic leading-relaxed" style={{ background: '#F7F4EE', border: '1px solid #E8E2D6', color: '#1A1A1A' }}>
@@ -220,7 +279,7 @@ export default function Team() {
                     {/* Right Goal */}
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-xs uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ background: '#FFF7ED', color: '#C2410C' }}>Employee B</span>
+                        <span className="font-semibold text-xs uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ background: '#EEF1F7', color: '#7C93BD' }}>Employee B</span>
                         <h5 className="font-bold text-sm" style={{ color: '#1A1A1A' }}>{flag.employee_name_b}</h5>
                       </div>
                       <p className="text-sm font-medium p-3.5 rounded-xl italic leading-relaxed" style={{ background: '#F7F4EE', border: '1px solid #E8E2D6', color: '#1A1A1A' }}>
@@ -231,7 +290,7 @@ export default function Team() {
 
                   {/* AI Reason */}
                   <div className="pt-3.5 space-y-1.5" style={{ borderTop: '1px solid #E8E2D6' }}>
-                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: '#B5651D' }}>
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider" style={{ color: '#3B4B6B' }}>
                       <AlertTriangle size={14} />
                       AI Overlap Detection Reason
                     </div>
@@ -266,14 +325,14 @@ export default function Team() {
                         to={`/team/member/${member.id}`}
                         className="group inline-flex items-center gap-2 text-xl font-bold transition-colors"
                         style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}
-                        onMouseOver={e => e.currentTarget.style.color = '#B5651D'}
+                        onMouseOver={e => e.currentTarget.style.color = '#3B4B6B'}
                         onMouseOut={e => e.currentTarget.style.color = '#1A1A1A'}
                       >
                         {member.full_name}
                         <span className="font-normal text-sm" style={{ color: '#6B6558', fontFamily: 'Inter, sans-serif' }}>
                           ({member.job_title} · {member.department})
                         </span>
-                        <ArrowRight size={16} style={{ color: '#F2994A' }} />
+                        <ArrowRight size={16} style={{ color: '#3B4B6B' }} />
                       </Link>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="pill-neutral">{member.role}</span>
@@ -322,6 +381,95 @@ export default function Team() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Manager Review Section for profile requests */}
+      {currentUser?.role === 'manager' && (
+        <div className="space-y-4 pt-8 mt-8 animate-stagger-2" style={{ borderTop: '1px solid #E8E2D6' }}>
+          <h2 className="text-xl font-bold flex items-center gap-2 mb-4" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
+            <Users size={20} style={{ color: '#3B4B6B' }} />
+            Pending Profile Change Requests (My Team)
+          </h2>
+
+          {reviewMessage && (
+            <div className="p-3 bg-[#ECFDF5] text-[#059669] border border-[#A7F3D0] rounded-xl text-sm font-semibold animate-stagger-1">
+              {reviewMessage}
+            </div>
+          )}
+
+          {pendingRequests.length === 0 ? (
+            <div className="rounded-2xl p-8 text-center" style={{ border: '2px dashed #E8E2D6', background: '#FFFFFF' }}>
+              <p className="text-sm font-medium" style={{ color: '#6B6558' }}>No pending change requests from your team members.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingRequests.map((req) => (
+                <div key={req.id} className="card p-5 space-y-4 relative overflow-hidden" style={{ borderLeft: '4px solid #3B4B6B' }}>
+                  <div className="flex justify-between items-start flex-wrap gap-4">
+                    <div className="space-y-1">
+                      <p className="font-bold text-sm text-[#1A1A1A]">
+                        {req.requester_name}
+                      </p>
+                      <p className="text-xs" style={{ color: '#6B6558' }}>
+                        Requested change to <span className="font-bold uppercase font-mono">{req.field_name.replace('_', ' ')}</span>
+                      </p>
+                      <div className="flex items-center gap-2 text-xs pt-1.5 flex-wrap">
+                        <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono">Current: {req.current_value || 'None'}</span>
+                        <span className="text-gray-400">→</span>
+                        <span className="bg-[#EEF1F7] text-[#3B4B6B] px-2 py-0.5 rounded font-bold font-mono">Requested: {req.requested_value}</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-[#6B6558] font-mono">
+                      Submitted: {new Date(req.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  {rejectingRequestId === req.id ? (
+                    <div className="p-3 bg-red-50/50 rounded-xl border border-red-200 space-y-3 animate-stagger-1">
+                      <label className="block text-xs font-semibold text-red-800">Add an optional rejection reason:</label>
+                      <input
+                        type="text"
+                        className="w-full px-3 py-1.5 text-xs bg-white rounded-lg border border-red-200"
+                        placeholder="e.g. Please enter your correct formal job title"
+                        value={rejectNote}
+                        onChange={e => setRejectNote(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => setRejectingRequestId(null)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleReviewRequest(req.id, 'rejected')}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white cursor-pointer"
+                        >
+                          Confirm Reject
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex justify-end gap-2 pt-2" style={{ borderTop: '1px solid #E8E2D6' }}>
+                      <button
+                        onClick={() => setRejectingRequestId(req.id)}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => handleReviewRequest(req.id, 'approved')}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#3B4B6B] text-white hover:bg-[#5C7299] cursor-pointer transition-colors"
+                      >
+                        Approve
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

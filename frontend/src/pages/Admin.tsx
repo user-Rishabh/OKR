@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Settings, Building2, Plus, Trash2, Edit2, Save, X, AlertCircle, Loader2, Sparkles, Check } from 'lucide-react';
+import { Settings, Building2, Plus, Trash2, Edit2, Save, X, AlertCircle, Loader2, Sparkles, Check, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface Pillar {
@@ -37,39 +37,190 @@ export default function Admin() {
   const [editDescription, setEditDescription] = useState('');
   const [updatingPillar, setUpdatingPillar] = useState(false);
 
+  // Profile change requests states
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState('');
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+
+  const fetchAdminData = async () => {
+    if (!currentUser || !session) return;
+    if (currentUser.role !== 'admin') {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      // 1. Fetch current company
+      const companyRes = await fetch('http://localhost:8000/api/companies/current', {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!companyRes.ok) throw new Error('Failed to fetch company details');
+      const companyData = await companyRes.json();
+      setCompany(companyData);
+
+      // 2. Fetch strategic pillars
+      const pillarsRes = await fetch(`http://localhost:8000/api/pillars?company_id=${companyData.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!pillarsRes.ok) throw new Error('Failed to fetch strategic pillars');
+      const pillarsData = await pillarsRes.json();
+      setPillars(pillarsData);
+
+      // 3. Fetch pending profile change requests
+      const requestsRes = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (requestsRes.ok) {
+        const requestsData = await requestsRes.json();
+        setPendingRequests(requestsData);
+      }
+    } catch (err: any) {
+      setError(err.message || 'An error occurred loading settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchAdminData = async () => {
-      if (!currentUser || !session) return;
-      if (currentUser.role !== 'admin') {
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        // 1. Fetch current company
-        const companyRes = await fetch('http://localhost:8000/api/companies/current', {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        if (!companyRes.ok) throw new Error('Failed to fetch company details');
-        const companyData = await companyRes.json();
-        setCompany(companyData);
-
-        // 2. Fetch strategic pillars
-        const pillarsRes = await fetch(`http://localhost:8000/api/pillars?company_id=${companyData.id}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        if (!pillarsRes.ok) throw new Error('Failed to fetch strategic pillars');
-        const pillarsData = await pillarsRes.json();
-        setPillars(pillarsData);
-      } catch (err: any) {
-        setError(err.message || 'An error occurred loading settings');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAdminData();
   }, [currentUser, session]);
+
+  // Handle Strategic Pillar Creation
+  const handleAddPillar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTitle.trim() || !company) return;
+    
+    setCreatingPillar(true);
+    try {
+      const res = await fetch('http://localhost:8000/api/pillars', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          company_id: company.id,
+          title: newTitle,
+          description: newDescription
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to create strategic pillar');
+      }
+      
+      const newPillar = await res.json();
+      // Calculate default counts
+      newPillar.active_goals_count = 0;
+      newPillar.total_goals_count = 0;
+      
+      setPillars(prev => [newPillar, ...prev]);
+      setNewTitle('');
+      setNewDescription('');
+      setShowAddForm(false);
+    } catch (err: any) {
+      alert(err.message || 'Failed to add pillar');
+    } finally {
+      setCreatingPillar(false);
+    }
+  };
+
+  // Handle Edit Start
+  const startEdit = (pillar: Pillar) => {
+    setEditingPillarId(pillar.id);
+    setEditTitle(pillar.title);
+    setEditDescription(pillar.description || '');
+  };
+
+  // Handle Edit Save
+  const handleSaveEdit = async (pillarId: string) => {
+    if (!editTitle.trim()) return;
+    
+    setUpdatingPillar(true);
+    try {
+      const res = await fetch(`http://localhost:8000/api/pillars/${pillarId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDescription
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to update strategic pillar');
+      }
+      
+      const updated = await res.json();
+      setPillars(prev => prev.map(p => p.id === pillarId ? { ...p, title: updated.title, description: updated.description } : p));
+      setEditingPillarId(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update pillar');
+    } finally {
+      setUpdatingPillar(false);
+    }
+  };
+
+  // Handle Strategic Pillar Delete
+  const handleDeletePillar = async (pillar: Pillar) => {
+    const confirmationMsg = pillar.total_goals_count > 0 
+      ? `This pillar is used by ${pillar.total_goals_count} goals - they will become unaligned. Continue?`
+      : 'Are you sure you want to delete this strategic pillar?';
+      
+    if (!window.confirm(confirmationMsg)) return;
+    
+    try {
+      const res = await fetch(`http://localhost:8000/api/pillars/${pillar.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to delete strategic pillar');
+      }
+      
+      setPillars(prev => prev.filter(p => p.id !== pillar.id));
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete pillar');
+    }
+  };
+
+  // Handle Profile Request Approval / Rejection
+  const handleReviewRequest = async (reqId: string, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/profile/change-requests/${reqId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          status,
+          reviewer_note: status === 'rejected' && rejectNote.trim() ? rejectNote : undefined
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || 'Failed to review request');
+      }
+      
+      setReviewMessage(`Request successfully ${status}!`);
+      setTimeout(() => setReviewMessage(null), 3000);
+      setRejectingRequestId(null);
+      setRejectNote('');
+      fetchAdminData(); // Refresh requests list
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
 
   // Access Gate Check
   if (currentUser?.role !== 'admin') {
@@ -82,103 +233,14 @@ export default function Admin() {
     );
   }
 
-  const handleAddPillar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!company || !session) return;
-    
-    setCreatingPillar(true);
-    try {
-      const res = await fetch('http://localhost:8000/api/pillars', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          company_id: company.id,
-          title: newTitle,
-          description: newDescription
-        })
-      });
-      if (!res.ok) throw new Error('Failed to create strategic pillar');
-      const newPillar = await res.json();
-      setPillars(prev => [newPillar, ...prev]);
-      
-      // Reset form
-      setNewTitle('');
-      setNewDescription('');
-      setShowAddForm(false);
-    } catch (err: any) {
-      alert(err.message || 'Failed to create pillar');
-    } finally {
-      setCreatingPillar(false);
-    }
-  };
-
-  const startEdit = (pillar: Pillar) => {
-    setEditingPillarId(pillar.id);
-    setEditTitle(pillar.title);
-    setEditDescription(pillar.description || '');
-  };
-
-  const handleSaveEdit = async (pillarId: string) => {
-    if (!session) return;
-    
-    setUpdatingPillar(true);
-    try {
-      const res = await fetch(`http://localhost:8000/api/pillars/${pillarId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          title: editTitle,
-          description: editDescription
-        })
-      });
-      if (!res.ok) throw new Error('Failed to update strategic pillar');
-      const updatedPillar = await res.json();
-      
-      setPillars(prev => prev.map(p => p.id === pillarId ? updatedPillar : p));
-      setEditingPillarId(null);
-    } catch (err: any) {
-      alert(err.message || 'Failed to save changes');
-    } finally {
-      setUpdatingPillar(false);
-    }
-  };
-
-  const handleDeletePillar = async (pillar: Pillar) => {
-    if (!session) return;
-    
-    const message = pillar.total_goals_count > 0 
-      ? `This pillar is used by ${pillar.total_goals_count} goals — they'll become unaligned. Continue?`
-      : 'Are you sure you want to delete this strategic pillar?';
-      
-    if (!window.confirm(message)) return;
-
-    try {
-      const res = await fetch(`http://localhost:8000/api/pillars/${pillar.id}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-      if (!res.ok) throw new Error('Failed to delete strategic pillar');
-      
-      setPillars(prev => prev.filter(p => p.id !== pillar.id));
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete pillar');
-    }
-  };
-
   if (loading) return (
     <div className="space-y-8 font-sans">
       <div>
         <h1 style={{ fontSize: 40 }}>Admin <span className="gradient-text">Settings</span></h1>
-        <p className="mt-1 text-base" style={{ color: '#6B6558' }}>Loading strategic pillar configurations...</p>
+        <p className="mt-1 text-base" style={{ color: '#6B6558' }}>Loading settings details...</p>
       </div>
       <div className="flex justify-center items-center py-20">
-        <Loader2 size={36} className="animate-spin" style={{ color: '#F2994A' }} />
+        <Loader2 size={36} className="animate-spin" style={{ color: '#3B4B6B' }} />
       </div>
     </div>
   );
@@ -192,7 +254,7 @@ export default function Admin() {
   );
 
   return (
-    <div className="space-y-8 font-sans animate-stagger-1">
+    <div className="space-y-12 font-sans animate-stagger-1">
       {/* Header */}
       <div className="flex justify-between items-center flex-wrap gap-5">
         <div>
@@ -223,7 +285,7 @@ export default function Admin() {
       {showAddForm && (
         <div className="card card-top-orange p-6 space-y-4 animate-stagger-1">
           <h3 className="text-lg font-bold flex items-center gap-2" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
-            <Sparkles size={18} style={{ color: '#F2994A' }} />
+            <Sparkles size={18} style={{ color: '#3B4B6B' }} />
             New Strategic Pillar
           </h3>
           <form onSubmit={handleAddPillar} className="space-y-4">
@@ -239,24 +301,15 @@ export default function Admin() {
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>Description</label>
               <textarea
-                required rows={3} placeholder="Provide details on this strategic pillar, key drivers and alignment parameters..."
+                rows={3} placeholder="e.g. Expand platform feature set with compliance and Single Sign-On features requested by large companies."
                 className="w-full px-4 py-2.5 text-sm resize-none"
                 value={newDescription}
                 onChange={e => setNewDescription(e.target.value)}
               />
             </div>
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end pt-2">
               <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 text-sm font-semibold rounded-xl border border-divider hover:bg-[#F0EDE6] transition-colors cursor-pointer"
-                style={{ color: '#6B6558' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creatingPillar}
+                type="submit" disabled={creatingPillar}
                 className="gradient-button px-5 py-2 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer"
               >
                 {creatingPillar ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
@@ -270,7 +323,7 @@ export default function Admin() {
       {/* Pillars List */}
       <div>
         <h2 className="text-xl font-bold flex items-center gap-2 mb-4" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
-          <Building2 size={20} style={{ color: '#F2994A' }} />
+          <Building2 size={20} style={{ color: '#3B4B6B' }} />
           Company Strategic Pillars
         </h2>
         
@@ -289,37 +342,31 @@ export default function Admin() {
                     /* Inline Editing Mode */
                     <div className="space-y-4 flex-1">
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>Title</label>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#6B6558' }}>Title</label>
                         <input
-                          type="text" required
-                          className="w-full px-3 py-2 text-sm"
-                          value={editTitle}
-                          onChange={e => setEditTitle(e.target.value)}
+                          type="text" className="w-full px-3 py-2 text-sm"
+                          value={editTitle} onChange={e => setEditTitle(e.target.value)}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>Description</label>
+                        <label className="block text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: '#6B6558' }}>Description</label>
                         <textarea
-                          required rows={3}
-                          className="w-full px-3 py-2 text-sm resize-none"
-                          value={editDescription}
-                          onChange={e => setEditDescription(e.target.value)}
+                          rows={3} className="w-full px-3 py-2 text-sm resize-none"
+                          value={editDescription} onChange={e => setEditDescription(e.target.value)}
                         />
                       </div>
                       <div className="flex justify-end gap-2 pt-2">
                         <button
-                          type="button"
                           onClick={() => setEditingPillarId(null)}
-                          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-divider hover:bg-[#F0EDE6] transition-colors cursor-pointer"
-                          style={{ color: '#6B6558' }}
+                          className="px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer"
+                          style={{ background: '#F0EDE6', color: '#1A1A1A' }}
                         >
                           Cancel
                         </button>
                         <button
-                          type="button"
                           onClick={() => handleSaveEdit(pillar.id)}
                           disabled={updatingPillar}
-                          className="gradient-button px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                          className="gradient-button px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                         >
                           {updatingPillar ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                           Save Changes
@@ -328,14 +375,12 @@ export default function Admin() {
                     </div>
                   ) : (
                     /* View Mode */
-                    <div className="space-y-3 flex-1 flex flex-col justify-between">
+                    <div className="flex flex-col justify-between flex-1 space-y-3">
                       <div>
-                        <h3 className="text-lg font-bold" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
-                          {pillar.title}
-                        </h3>
-                        <p className="text-sm mt-2 leading-relaxed" style={{ color: '#6B6558' }}>
-                          {pillar.description || 'No description provided.'}
-                        </p>
+                        <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{pillar.title}</h4>
+                        {pillar.description && (
+                          <p className="text-sm mt-1.5 leading-relaxed" style={{ color: '#6B6558' }}>{pillar.description}</p>
+                        )}
                       </div>
                       
                       <div className="flex justify-between items-center pt-4" style={{ borderTop: '1px solid #E8E2D6' }}>
@@ -346,7 +391,7 @@ export default function Admin() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => startEdit(pillar)}
-                            className="p-2 rounded-lg transition-colors hover:bg-[#F0EDE6] text-muted hover:text-brand-orange cursor-pointer"
+                            className="p-2 rounded-lg transition-colors hover:bg-[#F0EDE6] text-muted cursor-pointer"
                             title="Edit Strategic Pillar"
                             style={{ color: '#6B6558' }}
                           >
@@ -367,6 +412,93 @@ export default function Admin() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Pending Change Requests Section */}
+      <div className="space-y-4 pt-6" style={{ borderTop: '1px solid #E8E2D6' }}>
+        <h2 className="text-xl font-bold flex items-center gap-2 mb-4" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
+          <Users size={20} style={{ color: '#3B4B6B' }} />
+          Pending Profile Change Requests
+        </h2>
+
+        {reviewMessage && (
+          <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl text-sm font-semibold animate-stagger-1">
+            {reviewMessage}
+          </div>
+        )}
+
+        {pendingRequests.length === 0 ? (
+          <div className="rounded-2xl p-10 text-center" style={{ border: '2px dashed #E8E2D6', background: '#FFFFFF' }}>
+            <p className="text-sm font-medium" style={{ color: '#6B6558' }}>No pending profile change requests for review.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {pendingRequests.map((req) => (
+              <div key={req.id} className="card p-5 space-y-4 relative overflow-hidden" style={{ borderLeft: '4px solid #3B4B6B' }}>
+                <div className="flex justify-between items-start flex-wrap gap-4">
+                  <div className="space-y-1">
+                    <p className="font-bold text-sm text-[#1A1A1A]">
+                      {req.requester_name} <span className="font-normal text-xs text-[#6B6558]">({req.requester_role})</span>
+                    </p>
+                    <p className="text-xs" style={{ color: '#6B6558' }}>
+                      Requested change to <span className="font-bold uppercase font-mono">{req.field_name.replace('_', ' ')}</span>
+                    </p>
+                    <div className="flex items-center gap-2 text-xs pt-1.5 flex-wrap">
+                      <span className="bg-gray-100 text-gray-700 px-2 py-0.5 rounded font-mono">Current: {req.current_value || 'None'}</span>
+                      <span className="text-gray-400">→</span>
+                      <span className="bg-[#EEF1F7] text-[#3B4B6B] px-2 py-0.5 rounded font-bold font-mono">Requested: {req.requested_value}</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-[#6B6558] font-mono">
+                    Submitted: {new Date(req.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+
+                {rejectingRequestId === req.id ? (
+                  <div className="p-3 bg-red-50/50 rounded-xl border border-red-200 space-y-3 animate-stagger-1">
+                    <label className="block text-xs font-semibold text-red-800">Add an optional rejection reason:</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-1.5 text-xs bg-white rounded-lg border border-red-200"
+                      placeholder="e.g. Please enter your correct formal job title"
+                      value={rejectNote}
+                      onChange={e => setRejectNote(e.target.value)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={() => setRejectingRequestId(null)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => handleReviewRequest(req.id, 'rejected')}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white cursor-pointer"
+                      >
+                        Confirm Reject
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end gap-2 pt-2" style={{ borderTop: '1px solid #E8E2D6' }}>
+                    <button
+                      onClick={() => setRejectingRequestId(req.id)}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold border border-red-200 text-red-600 hover:bg-red-50 cursor-pointer transition-colors"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => handleReviewRequest(req.id, 'approved')}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-[#3B4B6B] text-white hover:bg-[#5C7299] cursor-pointer transition-colors"
+                    >
+                      Approve
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </div>

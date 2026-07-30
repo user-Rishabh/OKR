@@ -10,9 +10,9 @@
   --color-bg-surface: #FFFFFF;
   --color-bg-hover:   #F0EDE6;
 
-  /* Accent palette */
-  --color-brand-amber:  #F2994A;
-  --color-brand-orange: #B5651D;
+  /* Accent palette (Slate Blue Theme) */
+  --color-brand-amber:  #3B4B6B;
+  --color-brand-orange: #5C7299;
   --color-brand-teal:   #10B981;
   --color-brand-red:    #EF4444;
   --color-brand-blue:   #3B82F6;
@@ -92,8 +92,8 @@
   }
   input:focus, textarea:focus, select:focus, button:focus-visible {
     outline: none;
-    border-color: #F2994A;
-    box-shadow: 0 0 0 3px rgba(242, 153, 74, 0.2);
+    border-color: #3B4B6B;
+    box-shadow: 0 0 0 3px rgba(59, 75, 107, 0.2);
   }
 }
 
@@ -116,7 +116,7 @@
 
   /* Coloured top accent bar per card context */
   .card-top-green  { border-top: 4px solid #10B981 !important; }
-  .card-top-orange { border-top: 4px solid #F2994A !important; }
+  .card-top-orange { border-top: 4px solid #3B4B6B !important; }
   .card-top-blue   { border-top: 4px solid #3B82F6 !important; }
   .card-top-neutral{ border-top: 4px solid #D4C9B8 !important; }
   .card-top-red    { border-top: 4px solid #EF4444 !important; }
@@ -134,30 +134,30 @@
   .hover-glow:hover {
     box-shadow: 0 6px 20px rgba(0,0,0,0.1) !important;
     transform: translateY(-2px) !important;
-    border-color: #F2994A !important;
+    border-color: #3B4B6B !important;
   }
 
   /* ── Gradient text ─────────────────────────── */
   .gradient-text {
-    background: linear-gradient(135deg, #F2994A, #B5651D);
+    background: linear-gradient(135deg, #3B4B6B, #5C7299);
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
     display: inline;
   }
 
-  /* ── Gradient button (warm orange) ─────────── */
+  /* ── Gradient button (slate blue) ─────────── */
   .gradient-button {
-    background: linear-gradient(135deg, #F2994A, #B5651D) !important;
+    background: linear-gradient(135deg, #3B4B6B, #5C7299) !important;
     color: #FFFFFF !important;
-    box-shadow: 0 2px 12px rgba(242, 153, 74, 0.3) !important;
+    box-shadow: 0 2px 12px rgba(59, 75, 107, 0.3) !important;
     border: none !important;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
   .gradient-button:hover:not(:disabled) {
-    box-shadow: 0 4px 20px rgba(242, 153, 74, 0.45) !important;
+    box-shadow: 0 4px 20px rgba(59, 75, 107, 0.45) !important;
     transform: translateY(-1px) scale(1.01) !important;
-    filter: brightness(1.04);
+    filter: brightness(1.08);
   }
   .gradient-button:active:not(:disabled) {
     transform: translateY(0) scale(0.99) !important;
@@ -169,9 +169,9 @@
 
   /* ── Gradient badge ────────────────────────── */
   .gradient-badge {
-    background: linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1));
-    border: 1px solid rgba(242,153,74,0.35);
-    color: #B5651D;
+    background: linear-gradient(135deg, rgba(59,75,107,0.1), rgba(92,114,153,0.1));
+    border: 1px solid rgba(59,75,107,0.35);
+    color: #5C7299;
   }
 
   /* ── Status pills ─────────────────────────── */
@@ -199,9 +199,9 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    background: #FFF7ED;
-    color: #C2410C;
-    border: 1px solid #FED7AA;
+    background: #EEF1F7;
+    color: #7C93BD;
+    border: 1px solid #D4DAE6;
     border-radius: 999px;
     padding: 2px 10px;
     font-size: 11px;
@@ -212,7 +212,7 @@
     content: "";
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: #F2994A;
+    background: #7C93BD;
     flex-shrink: 0;
   }
   .pill-blue {
@@ -265,7 +265,7 @@
     justify-content: center;
     flex-shrink: 0;
   }
-  .icon-badge-orange { background: #FFF7ED; color: #C2410C; }
+  .icon-badge-orange { background: #EEF1F7; color: #5C7299; }
   .icon-badge-green  { background: #ECFDF5; color: #059669; }
   .icon-badge-blue   { background: #EFF6FF; color: #2563EB; }
 

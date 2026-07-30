@@ -25,7 +25,7 @@ export default function ProgressRing({ progress, size = 60, strokeWidth = 6, sho
 
   let strokeColor = '#10B981'; // green ≥70%
   if (clamped < 30) strokeColor = '#EF4444';
-  else if (clamped < 70) strokeColor = '#F2994A';
+  else if (clamped < 70) strokeColor = '#3B4B6B';
 
   return (
     <div className="relative flex items-center justify-center shrink-0" style={{ width: size, height: size }}>

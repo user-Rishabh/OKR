@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Target, Sparkles, Loader2, Trash2, Calendar } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { Plus, Target, Sparkles, Loader2, Trash2, Calendar, LayoutDashboard, Compass, Activity, CheckCircle2, Circle, AlertCircle, X, Check } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
 import { useAuth } from '../context/AuthContext';
@@ -28,7 +29,9 @@ export default function Dashboard() {
   const [isSavingUpdate, setIsSavingUpdate] = useState(false);
   const [loading, setLoading] = useState(true);
   const [nudges, setNudges] = useState<Record<string, { text: string; loading: boolean }>>({});
-  const [activeTab, setActiveTab] = useState<'overview' | 'goals' | 'checkins'>('overview');
+  const context = useOutletContext<{ activeTab: 'overview' | 'goals' | 'checkins'; setActiveTab: (t: 'overview' | 'goals' | 'checkins') => void } | null>();
+  const activeTab = context?.activeTab ?? 'overview';
+  const setActiveTab = context?.setActiveTab ?? (() => {});
   const [generatedNudges, setGeneratedNudges] = useState<Array<{ id: string; objective: string; text: string; date: string }>>([]);
   const { currentUser, session, loading: authLoading } = useAuth();
 
@@ -62,6 +65,13 @@ export default function Dashboard() {
   const alignmentScore = activeGoals.length > 0
     ? Math.round((activeGoals.filter(g => g.pillar_id !== null).length / activeGoals.length) * 100)
     : 0;
+
+  const daysRemaining = (() => {
+    const endOfCycle = new Date('2026-09-30T23:59:59');
+    const diffTime = Math.max(0, endOfCycle.getTime() - new Date().getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  })();
 
   /* ─── handlers ────────────────────────────────────────────── */
   const handleAddGoal = (goal: Goal) => setActiveGoals(prev => [goal, ...prev]);
@@ -152,31 +162,7 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Tab bar */}
-      <div className="relative flex rounded-xl p-1 max-w-sm" style={{ background: '#FFFFFF', border: '1px solid #E8E2D6' }}>
-        {(['overview', 'goals', 'checkins'] as const).map((tab, i) => {
-          const label = tab === 'overview' ? 'Overview' : tab === 'goals' ? 'My Goals' : 'Check-ins';
-          const active = activeTab === tab;
-          return (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className="flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider transition-all text-center cursor-pointer rounded-lg z-10 relative"
-              style={active ? { color: '#FFFFFF' } : { color: '#6B6558' }}
-            >
-              {label}
-            </button>
-          );
-        })}
-        <div
-          className="absolute top-1 bottom-1 rounded-lg transition-all duration-300 ease-out"
-          style={{
-            background: 'linear-gradient(135deg, #F2994A, #B5651D)',
-            width: 'calc(33.33% - 2px)',
-            left: activeTab === 'overview' ? '4px' : activeTab === 'goals' ? 'calc(33.33% + 2px)' : 'calc(66.66% + 0px)',
-          }}
-        />
-      </div>
+      {/* Tab bar has been moved to left sidebar layout */}
 
       {/* Content */}
       {(loading || authLoading) ? (
@@ -188,12 +174,17 @@ export default function Dashboard() {
 
           {/* ── Overview tab ─────────────────────────────── */}
           {activeTab === 'overview' && (
-            <div className="space-y-8">
+            <div className="space-y-8 animate-stagger-1">
               {/* Stat cards */}
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                <div className={`card ${topBarClass(averageProgress)} p-6 flex items-center justify-between`}>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6B6558' }}>Active Goals</p>
+              <div className="grid gap-6 sm:grid-cols-3">
+                <div className={`card ${topBarClass(averageProgress)} p-6 flex items-center justify-between relative overflow-hidden`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="icon-badge icon-badge-orange" style={{ width: 32, height: 32, borderRadius: 8 }}>
+                        <Target size={16} />
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6B6558' }}>Active Goals</p>
+                    </div>
                     <p className="text-4xl font-extrabold font-mono mt-2" style={{ color: '#1A1A1A' }}>
                       <CountUp value={activeGoals.length} />
                     </p>
@@ -202,9 +193,14 @@ export default function Dashboard() {
                   <ProgressRing progress={averageProgress} size={64} strokeWidth={6} />
                 </div>
 
-                <div className={`card ${topBarClass(alignmentScore)} p-6 flex items-center justify-between`}>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6B6558' }}>Alignment Score</p>
+                <div className={`card ${topBarClass(alignmentScore)} p-6 flex items-center justify-between relative overflow-hidden`}>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="icon-badge icon-badge-green" style={{ width: 32, height: 32, borderRadius: 8 }}>
+                        <Compass size={16} />
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6B6558' }}>Alignment Score</p>
+                    </div>
                     <p className="text-4xl font-extrabold font-mono mt-2" style={{ color: '#1A1A1A' }}>
                       <CountUp value={alignmentScore} />%
                     </p>
@@ -212,12 +208,30 @@ export default function Dashboard() {
                   </div>
                   <ProgressRing progress={alignmentScore} size={64} strokeWidth={6} />
                 </div>
+
+                <div className="card card-top-blue p-6 flex items-center justify-between relative overflow-hidden">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="icon-badge icon-badge-blue" style={{ width: 32, height: 32, borderRadius: 8 }}>
+                        <Calendar size={16} />
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#6B6558' }}>Days Remaining</p>
+                    </div>
+                    <p className="text-4xl font-extrabold font-mono mt-2" style={{ color: '#1A1A1A' }}>
+                      <CountUp value={daysRemaining} />
+                    </p>
+                    <p className="text-xs mt-1" style={{ color: '#6B6558' }}>Cycle: <span className="font-bold">Q3-2026</span></p>
+                  </div>
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[#EFF6FF] border border-[#BFDBFE]" style={{ color: '#2563EB' }}>
+                    <Calendar size={24} />
+                  </div>
+                </div>
               </div>
 
               {/* Snapshot */}
               <div className="space-y-4">
                 <h2 style={{ fontFamily: 'Clash Display, Inter, sans-serif', fontWeight: 700, fontSize: 22, color: '#1A1A1A' }}>
-                  Objectives <span className="gradient-text">Snapshot</span>
+                  Objectives Snapshot
                 </h2>
                 {activeGoals.length === 0 ? (
                   <div className="rounded-2xl p-12 text-center" style={{ border: '2px dashed #E8E2D6' }}>
@@ -225,20 +239,73 @@ export default function Dashboard() {
                     <p className="text-sm mt-1" style={{ color: '#6B6558' }}>Switch to the "My Goals" tab to create your first objective.</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {activeGoals.map(goal => {
-                      const krs = goal.key_results || [];
-                      const gPct = krs.length > 0 ? krs.reduce((s, k) => s + k.progress_pct, 0) / krs.length : 0;
-                      return (
-                        <div key={goal.id} className={`card ${topBarClass(gPct)} p-5 flex items-center justify-between gap-4`}>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm leading-snug truncate" style={{ color: '#1A1A1A' }}>{goal.objective_text}</p>
-                            <p className="text-xs font-mono mt-0.5" style={{ color: '#6B6558' }}>{goal.cycle}</p>
+                  <div className="card overflow-hidden" style={{ border: '1px solid #E8E2D6', background: '#FFFFFF', borderRadius: 16 }}>
+                    <div className="divide-y divide-[#E8E2D6]">
+                      {activeGoals.map(goal => {
+                        const krs = goal.key_results || [];
+                        const gPct = krs.length > 0 ? krs.reduce((s, k) => s + k.progress_pct, 0) / krs.length : 0;
+                        return (
+                          <div key={goal.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-5 hover:bg-[#FAFAF8] transition-colors">
+                            {/* Left Side */}
+                            <div className="flex-grow space-y-2">
+                              <div className="flex items-start gap-2.5">
+                                <span className={`w-2.5 h-2.5 rounded-full mt-1.5 flex-shrink-0 ${gPct >= 70 ? 'bg-[#27AE60]' : gPct >= 30 ? 'bg-[#F2994A]' : 'bg-[#EB5757]'}`} />
+                                <h4 className="font-bold text-sm leading-snug" style={{ color: '#1A1A1A' }}>
+                                  {goal.objective_text}
+                                </h4>
+                              </div>
+                              <div className="flex items-center flex-wrap gap-2 text-xs">
+                                <span className={gPct >= 70 ? 'pill-green' : gPct >= 30 ? 'pill-orange' : 'pill-neutral'}>
+                                  {goal.status}
+                                </span>
+                                <span className="text-xs font-mono" style={{ color: '#6B6558' }}>{goal.cycle}</span>
+                                {goal.pillar_title && (
+                                  <span className="pill-blue">{goal.pillar_title}</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right Side */}
+                            <div className="w-full md:w-80 flex-shrink-0 space-y-2">
+                              <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#6B6558' }}>Key Results Progress</p>
+                              {krs.length === 0 ? (
+                                <p className="text-xs italic" style={{ color: '#6B6558' }}>No Key Results defined</p>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  {krs.map(kr => {
+                                    const isCompleted = kr.progress_pct >= 100;
+                                    const isAtRisk = kr.progress_pct < 30;
+                                    return (
+                                      <div key={kr.id} className="flex items-center gap-2 text-xs">
+                                        {isCompleted ? (
+                                          <CheckCircle2 size={12} className="text-[#27AE60] flex-shrink-0" />
+                                        ) : isAtRisk ? (
+                                          <AlertCircle size={12} className="text-[#EB5757] flex-shrink-0" />
+                                        ) : (
+                                          <Circle size={12} className="text-[#F2994A] flex-shrink-0" />
+                                        )}
+                                        <span className="flex-1 truncate" style={{ color: '#1A1A1A' }} title={kr.kr_text}>
+                                          {kr.kr_text}
+                                        </span>
+                                        <span className="font-mono font-bold w-8 text-right flex-shrink-0" style={{ color: '#6B6558' }}>
+                                          {kr.progress_pct}%
+                                        </span>
+                                        <div className="w-16 h-1.5 rounded-full bg-[#F0EDE6] overflow-hidden flex-shrink-0">
+                                          <div
+                                            className={`h-full rounded-full transition-all duration-500 ${kr.progress_pct >= 70 ? 'bg-[#27AE60]' : kr.progress_pct >= 30 ? 'bg-[#F2994A]' : 'bg-[#EB5757]'}`}
+                                            style={{ width: `${kr.progress_pct}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <ProgressRing progress={gPct} size={48} strokeWidth={4.5} />
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -255,8 +322,8 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-lg font-bold" style={{ color: '#1A1A1A' }}>No active goals yet</h3>
                   <p className="text-sm mt-1" style={{ color: '#6B6558', maxWidth: 300 }}>Let's create your first objective to start tracking progress.</p>
-                  <button onClick={() => setIsModalOpen(true)} className="gradient-button px-5 py-2.5 rounded-xl text-sm font-bold mt-6 cursor-pointer">
-                    Create a Goal
+                  <button onClick={() => setIsModalOpen(true)} className="gradient-button px-5 py-2.5 rounded-xl text-sm font-bold mt-6 cursor-pointer flex items-center gap-1.5 justify-center">
+                    <Plus size={14} /> Create a Goal
                   </button>
                 </div>
               ) : (
@@ -325,7 +392,7 @@ export default function Dashboard() {
                                 <button
                                   onClick={() => setNudges(prev => { const n = { ...prev }; delete n[goal.id]; return n; })}
                                   className="cursor-pointer text-base leading-none" style={{ color: '#6B6558' }}
-                                >×</button>
+                               >×</button>
                               )}
                             </div>
                           )}
@@ -361,8 +428,8 @@ export default function Dashboard() {
                                     >
                                       {isEstimating ? <><Loader2 size={12} className="animate-spin" />Estimating...</> : <><Sparkles size={12} />Get AI Estimate</>}
                                     </button>
-                                    <button onClick={() => setActiveUpdateKrId(null)} className="px-4 py-2.5 rounded-lg text-xs font-semibold cursor-pointer" style={{ background: '#F0EDE6', color: '#1A1A1A' }}>
-                                      Cancel
+                                    <button onClick={() => setActiveUpdateKrId(null)} className="px-4 py-2.5 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5" style={{ background: '#F0EDE6', color: '#1A1A1A' }}>
+                                      <X size={12} /> Cancel
                                     </button>
                                   </div>
 
@@ -398,20 +465,21 @@ export default function Dashboard() {
 
                                   <div className="flex justify-end">
                                     <button onClick={() => handleSaveUpdate(kr.id)} disabled={isSavingUpdate}
-                                      className="gradient-button text-xs font-bold px-5 py-2.5 rounded-lg cursor-pointer">
-                                      {isSavingUpdate ? 'Saving...' : 'Confirm & Save'}
+                                      className="gradient-button text-xs font-bold px-5 py-2.5 rounded-lg cursor-pointer flex items-center gap-1.5">
+                                      {isSavingUpdate ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                      Confirm & Save
                                     </button>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="flex justify-end">
                                   <button onClick={() => { setActiveUpdateKrId(kr.id); setUpdateText(''); setAiEstimate(null); setProposedProgress(kr.progress_pct); }}
-                                    className="text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors"
+                                    className="text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
                                     style={{ background: '#FFFFFF', border: '1px solid #E8E2D6', color: '#6B6558' }}
                                     onMouseOver={e => e.currentTarget.style.borderColor = '#F2994A'}
                                     onMouseOut={e => e.currentTarget.style.borderColor = '#E8E2D6'}
                                   >
-                                    Log Update
+                                    <Activity size={12} /> Log Update
                                   </button>
                                 </div>
                               )}
@@ -430,7 +498,7 @@ export default function Dashboard() {
           {activeTab === 'checkins' && (
             <div className="space-y-5 animate-stagger-1">
               <h2 style={{ fontFamily: 'Clash Display, Inter, sans-serif', fontWeight: 700, fontSize: 22, color: '#1A1A1A' }}>
-                AI Coach <span className="gradient-text">Check-ins</span>
+                AI Coach Check-ins
               </h2>
               {generatedNudges.length === 0 ? (
                 <div className="rounded-2xl p-14 flex flex-col items-center text-center" style={{ border: '2px dashed #E8E2D6' }}>

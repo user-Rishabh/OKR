@@ -7,6 +7,7 @@ import MemberDetail from './pages/MemberDetail'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
+import Settings from './pages/Settings'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
           <Route path="team" element={<Team />} />
           <Route path="team/member/:userId" element={<MemberDetail />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Route>
     </Routes>

@@ -57,7 +57,7 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (g: G
         <ul className="space-y-2">
           {goal.key_results.map((kr) => (
             <li key={kr.id} className="flex items-start gap-2 text-sm">
-              <span className="mt-1 flex-shrink-0" style={{ color: '#F2994A' }}>•</span>
+              <span className="mt-1 flex-shrink-0" style={{ color: '#3B4B6B' }}>•</span>
               <div className="flex-1">
                 <span style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
                 {kr.suggested_metric && <span className="text-xs block mt-0.5" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</span>}
@@ -141,14 +141,14 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)' }} onClick={handleClose} />
       <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-stagger-1"
-        style={{ background: '#FFFFFF', border: '1px solid #E8E2D6', borderRadius: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.12)', borderTop: '4px solid #F2994A' }}>
+        style={{ background: '#FFFFFF', border: '1px solid #E8E2D6', borderRadius: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.12)', borderTop: '4px solid #3B4B6B' }}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid #E8E2D6' }}>
           <h2 className="text-lg font-bold flex items-center gap-2" style={{ color: '#1A1A1A', fontFamily: 'Clash Display, Inter, sans-serif' }}>
             {step === 'suggestions' ? 'AI-Suggested ' : 'Create New '}
             <span className="gradient-text">{step === 'suggestions' ? 'Goals' : 'Goal'}</span>
-            {(step === 'suggestions' || step === 'loading') && <Sparkles size={18} style={{ color: '#F2994A' }} />}
+            {(step === 'suggestions' || step === 'loading') && <Sparkles size={18} style={{ color: '#3B4B6B' }} />}
           </h2>
           <button onClick={handleClose} className="p-1.5 rounded-lg cursor-pointer transition-colors" style={{ color: '#6B6558' }}>
             <X size={20} />
@@ -159,8 +159,8 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
         <div className="p-6 flex-1 min-h-0 overflow-y-auto space-y-5">
           {step === 'loading' && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ background: 'linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1))' }}>
-                <Loader2 size={28} style={{ color: '#F2994A' }} className="animate-spin" />
+              <div className="w-14 h-14 rounded-full flex items-center justify-center mb-5" style={{ background: 'linear-gradient(135deg, rgba(59,75,107,0.1), rgba(92,114,153,0.1))' }}>
+                <Loader2 size={28} style={{ color: '#3B4B6B' }} className="animate-spin" />
               </div>
               <h3 className="text-lg font-bold mb-2" style={{ color: '#1A1A1A' }}>Analyzing your focus area</h3>
               <p className="text-sm" style={{ color: '#6B6558' }}>Matching your role against company pillars to generate SMART goals...</p>
@@ -207,9 +207,9 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
                         onClick={() => setFormData({ ...formData, focus_area: pill })}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer hover:border-brand-amber hover:text-brand-orange"
                         style={{
-                          background: formData.focus_area === pill ? 'linear-gradient(135deg, rgba(242,153,74,0.1), rgba(181,101,29,0.1))' : '#F7F4EE',
-                          borderColor: formData.focus_area === pill ? '#F2994A' : '#E8E2D6',
-                          color: formData.focus_area === pill ? '#B5651D' : '#6B6558'
+                          background: formData.focus_area === pill ? 'linear-gradient(135deg, rgba(59,75,107,0.1), rgba(92,114,153,0.1))' : '#F7F4EE',
+                          borderColor: formData.focus_area === pill ? '#3B4B6B' : '#E8E2D6',
+                          color: formData.focus_area === pill ? '#3B4B6B' : '#6B6558'
                         }}
                       >
                         {pill}
