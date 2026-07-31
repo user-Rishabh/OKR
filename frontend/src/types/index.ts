@@ -1,3 +1,13 @@
+export interface Subtask {
+  id: string;
+  key_result_id: string;
+  title: string;
+  is_complete: boolean;
+  order_index: number;
+  created_at: string;
+  completed_at?: string;
+}
+
 export interface KeyResult {
   id: string;
   kr_text: string;
@@ -6,6 +16,7 @@ export interface KeyResult {
   current_value: number;
   unit?: string;
   progress_pct: number;
+  kr_subtasks?: Subtask[];
 }
 
 export interface Goal {

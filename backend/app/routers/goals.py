@@ -14,6 +14,7 @@ class KeyResultCreate(BaseModel):
     target_value: Optional[float] = None
     unit: Optional[str] = None
     suggested_metric_text: Optional[str] = None
+    subtasks: Optional[List[str]] = Field(default_factory=list)
 
 class GoalCreate(BaseModel):
     user_id: str
@@ -37,6 +38,7 @@ class SuggestionRequest(BaseModel):
 class KeyResultSuggestion(BaseModel):
     text: str
     suggested_metric: str
+    suggested_subtasks: List[str] = Field(default_factory=list)
 
 class GoalSuggestion(BaseModel):
     objective: str
@@ -77,6 +79,21 @@ async def create_goal(goal_data: GoalCreate, current_user: dict = Depends(get_cu
     if kr_insert_data:
         kr_res = supabase.table("key_results").insert(kr_insert_data).execute()
         created_goal["key_results"] = kr_res.data
+        
+        # Save suggested subtasks into kr_subtasks
+        subtasks_to_insert = []
+        for i, kr in enumerate(goal_data.key_results):
+            if kr.subtasks:
+                db_kr = kr_res.data[i]
+                for idx, st_title in enumerate(kr.subtasks):
+                    subtasks_to_insert.append({
+                        "key_result_id": db_kr["id"],
+                        "title": st_title,
+                        "is_complete": False,
+                        "order_index": idx
+                    })
+        if subtasks_to_insert:
+            supabase.table("kr_subtasks").insert(subtasks_to_insert).execute()
     else:
         created_goal["key_results"] = []
         
@@ -86,10 +103,11 @@ async def create_goal(goal_data: GoalCreate, current_user: dict = Depends(get_cu
 async def get_goals(user_id: str, current_user: dict = Depends(get_current_user)):
     if user_id != current_user["id"] and current_user["role"] not in ["manager", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized to view goals for this user")
-    goals_res = supabase.table("goals").select("*, key_results(*, progress_logs(*, users(full_name)))").eq("user_id", user_id).order("created_at", desc=True).execute()
+    goals_res = supabase.table("goals").select("*, key_results(*, kr_subtasks(*), progress_logs(*, users(full_name)))").eq("user_id", user_id).order("created_at", desc=True).execute()
     goals_data = goals_res.data
     for goal in goals_data:
         for kr in goal.get("key_results", []):
+            # Sort progress logs
             if "progress_logs" in kr and kr["progress_logs"]:
                 kr["progress_logs"] = sorted(
                     kr["progress_logs"],
@@ -98,6 +116,15 @@ async def get_goals(user_id: str, current_user: dict = Depends(get_current_user)
                 )
             else:
                 kr["progress_logs"] = []
+            
+            # Sort subtasks
+            if "kr_subtasks" in kr and kr["kr_subtasks"]:
+                kr["kr_subtasks"] = sorted(
+                    kr["kr_subtasks"],
+                    key=lambda x: x.get("order_index", 0)
+                )
+            else:
+                kr["kr_subtasks"] = []
     return goals_data
 
 
@@ -221,9 +248,20 @@ async def get_team_goals(team_id: str, current_user: dict = Depends(get_current_
     if requester_role == "manager" and team.get("manager_id") != requester_id:
         raise HTTPException(status_code=403, detail="You are not the manager of this team")
 
-    # Fetch users in the team with their goals and key results
-    res = supabase.table("users").select("*, goals(*, key_results(*))").eq("team_id", team_id).execute()
-    return res.data
+    # Fetch users in the team with their goals, key results, and nested subtasks
+    res = supabase.table("users").select("*, goals(*, key_results(*, kr_subtasks(*)))").eq("team_id", team_id).execute()
+    users_data = res.data
+    for u in users_data:
+        for g in u.get("goals", []):
+            for kr in g.get("key_results", []):
+                if "kr_subtasks" in kr and kr["kr_subtasks"]:
+                    kr["kr_subtasks"] = sorted(
+                        kr["kr_subtasks"],
+                        key=lambda x: x.get("order_index", 0)
+                    )
+                else:
+                    kr["kr_subtasks"] = []
+    return users_data
 
 @router.post("/suggest", response_model=List[GoalSuggestion])
 async def suggest_goals(request: SuggestionRequest):
@@ -251,8 +289,9 @@ Rules:
 1. Each objective must follow SMART criteria (Specific, Measurable, Achievable, Relevant, Time-bound).
 2. Each objective must have 2 to 4 key results.
 3. Each key result must have a specific 'suggested_metric' that INCLUDES A CONCRETE QUANTIFIABLE TARGET (a percentage, number, time duration, or count). Vague phrases without numbers will be rejected.
-4. 'aligned_pillar' must be EXACTLY ONE of these titles: {pillar_titles}, or 'none' if it doesn't fit any.
-5. You MUST return ONLY a raw JSON array of objects. No markdown formatting, no code blocks, no preamble, no explanations.
+4. Each key result must have a 'suggested_subtasks' list containing 2 to 4 relevant, actionable subtasks/milestones (as strings) to complete that key result.
+5. 'aligned_pillar' must be EXACTLY ONE of these titles: {pillar_titles}, or 'none' if it doesn't fit any.
+6. You MUST return ONLY a raw JSON array of objects. No markdown formatting, no code blocks, no preamble, no explanations.
 
 Examples of GOOD suggested_metric values:
 - "Reduce average query latency from 450ms to under 150ms"
@@ -269,7 +308,11 @@ Expected JSON schema:
   {{
     "objective": "...",
     "key_results": [
-      {{"text": "...", "suggested_metric": "..."}}
+      {{
+        "text": "...",
+        "suggested_metric": "...",
+        "suggested_subtasks": ["subtask 1", "subtask 2"]
+      }}
     ],
     "aligned_pillar": "..."
   }}

@@ -187,55 +187,80 @@ export default function MemberDetail() {
                         <div key={kr.id} className="card p-5 space-y-3">
                           <div onClick={() => setExpandedKRs(p => ({ ...p, [kr.id]: !p[kr.id] }))}
                             className="flex justify-between items-center gap-4 cursor-pointer py-1 rounded-lg">
-                            <div className="flex-1 space-y-1">
+                            <div className="flex-grow space-y-1 text-left">
                               <p className="text-sm font-semibold leading-snug" style={{ color: '#1A1A1A' }}>{kr.kr_text}</p>
                               {kr.suggested_metric && <p className="text-xs" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</p>}
+                              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mt-2">
+                                <span>{`${(kr.kr_subtasks || []).filter(s => s.is_complete).length} of ${(kr.kr_subtasks || []).length} complete (${Math.round(kr.progress_pct)}%)`}</span>
+                              </div>
+                              <div className="w-full bg-[#E8E2D6] h-1.5 rounded-full overflow-hidden mt-1">
+                                <div className="bg-[#3B4B6B] h-full rounded-full transition-all duration-300" style={{ width: `${kr.progress_pct}%` }} />
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <ProgressRing progress={kr.progress_pct} size={40} strokeWidth={4} showText={false} />
-                              <span className="text-xs font-bold font-mono w-10 text-right" style={{ color: '#1A1A1A' }}>{kr.progress_pct}%</span>
+                            <div className="flex items-center shrink-0 pl-2">
                               {isExpanded ? <ChevronUp size={16} style={{ color: '#6B6558' }} /> : <ChevronDown size={16} style={{ color: '#6B6558' }} />}
                             </div>
                           </div>
 
                           {isExpanded && (
                             <div className="pt-4 space-y-4" style={{ borderTop: '1px solid #E8E2D6' }}>
-                              <p className="text-xs font-bold uppercase tracking-wider font-mono" style={{ color: '#6B6558' }}>Activity Timeline</p>
-                              {!kr.progress_logs?.length ? (
-                                <p className="text-xs italic" style={{ color: '#6B6558' }}>No activity logged for this key result.</p>
-                              ) : (
-                                <div className="relative pl-6 space-y-5" style={{ borderLeft: '2px solid #E8E2D6' }}>
-                                  {kr.progress_logs.map(log => (
-                                    <div key={log.id} className="relative">
-                                      <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: '#3B4B6B', border: '2px solid #FFFFFF' }} />
-                                      <div className="text-xs space-y-1.5">
-                                        <div className="flex flex-wrap items-center gap-2" style={{ color: '#6B6558' }}>
-                                          <span className="flex items-center gap-1 font-semibold font-mono">
-                                            <Calendar size={11} />{formatDate(log.created_at)}
-                                          </span>
-                                          <span>·</span>
-                                          <span>by <span className="font-bold" style={{ color: '#1A1A1A' }}>{log.users?.full_name || 'System'}</span></span>
-                                          <span>·</span>
-                                          <span className="font-mono font-bold px-2 py-0.5 rounded-md" style={{ background: '#EEF1F7', color: '#3B4B6B', border: '1px solid #D4DAE6' }}>
-                                            {log.previous_value}% → {log.new_value}%
-                                          </span>
-                                        </div>
-                                        {log.note && (
-                                          <p className="italic text-xs leading-relaxed pl-3 max-w-lg py-2" style={{ borderLeft: '2px solid #10B981', color: '#1A1A1A', background: '#ECFDF5', borderRadius: '0 8px 8px 0' }}>
-                                            "{log.note}"
-                                          </p>
-                                        )}
-                                        {log.reasoning && (
-                                          <div className="flex items-start gap-1.5 text-xs px-3 py-2 rounded-xl max-w-lg leading-relaxed" style={{ background: '#FFF7ED', border: '1px solid #FED7AA', color: '#C2410C' }}>
-                                            <Sparkles size={11} style={{ flexShrink: 0, marginTop: 1 }} />
-                                            <span><span className="font-semibold">AI Interpretation:</span> {log.reasoning}</span>
-                                          </div>
-                                        )}
+                              {/* Subtasks Checklist */}
+                              <div className="text-left">
+                                <p className="text-xs font-bold uppercase tracking-wider font-mono text-[#6B6558] mb-2">Subtask Checklist</p>
+                                {!(kr.kr_subtasks || []).length ? (
+                                  <p className="text-xs italic text-[#6B6558]">No subtasks created.</p>
+                                ) : (
+                                  <div className="space-y-1.5 pl-1">
+                                    {(kr.kr_subtasks || []).map(st => (
+                                      <div key={st.id} className="flex items-center gap-2.5 text-xs py-0.5">
+                                        <input 
+                                          type="checkbox" 
+                                          checked={st.is_complete} 
+                                          disabled 
+                                          className="rounded border-[#E8E2D6] text-[#3B4B6B] w-4 h-4 cursor-not-allowed"
+                                        />
+                                        <span className={st.is_complete ? 'line-through text-[#A89F92]' : 'text-[#1A1A1A] font-medium'}>
+                                          {st.title}
+                                        </span>
                                       </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Activity Timeline */}
+                              <div className="pt-4 border-t border-[#E8E2D6] space-y-4">
+                                <p className="text-xs font-bold uppercase tracking-wider font-mono text-[#6B6558]">Activity Timeline</p>
+                                {!kr.progress_logs?.length ? (
+                                  <p className="text-xs italic" style={{ color: '#6B6558' }}>No activity logged for this key result.</p>
+                                ) : (
+                                  <div className="relative pl-6 space-y-5 border-l-2 border-[#E8E2D6]">
+                                    {kr.progress_logs.map(log => (
+                                      <div key={log.id} className="relative">
+                                        <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: '#3B4B6B', border: '2px solid #FFFFFF' }} />
+                                        <div className="text-xs space-y-1.5 text-left">
+                                          <div className="flex flex-wrap items-center gap-2" style={{ color: '#6B6558' }}>
+                                            <span className="flex items-center gap-1 font-semibold font-mono">
+                                              <Calendar size={11} />{formatDate(log.created_at)}
+                                            </span>
+                                            <span>·</span>
+                                            <span>by <span className="font-bold" style={{ color: '#1A1A1A' }}>{log.users?.full_name || 'System'}</span></span>
+                                            <span>·</span>
+                                            <span className="font-mono font-bold px-2 py-0.5 rounded-md" style={{ background: '#EEF1F7', color: '#3B4B6B', border: '1px solid #D4DAE6' }}>
+                                              {log.previous_value}% → {log.new_value}%
+                                            </span>
+                                          </div>
+                                          {log.note && (
+                                            <p className="italic text-xs leading-relaxed pl-3 max-w-lg py-2" style={{ borderLeft: '2px solid #10B981', color: '#1A1A1A', background: '#ECFDF5', borderRadius: '0 8px 8px 0' }}>
+                                              "{log.note}"
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           )}
                         </div>

@@ -365,13 +365,43 @@ export default function Team() {
                             <ProgressRing progress={gPct} size={48} strokeWidth={4.5} />
                           </div>
 
-                          <div className="space-y-2 pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
-                            {gKRs.map(kr => (
-                              <div key={kr.id} className="flex items-center justify-between gap-4 py-2.5 px-3 rounded-lg" style={{ background: '#F7F4EE' }}>
-                                <span className="text-sm font-medium flex-1" style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
-                                <ProgressRing progress={kr.progress_pct} size={36} strokeWidth={4} />
-                              </div>
-                            ))}
+                          <div className="space-y-3 pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
+                            {gKRs.map(kr => {
+                              const subtasks = kr.kr_subtasks || [];
+                              const totalSubtasks = subtasks.length;
+                              const completedSubtasks = subtasks.filter(s => s.is_complete).length;
+                              const completionPct = Math.round(kr.progress_pct);
+                              const statLabel = `${completedSubtasks}/${totalSubtasks} complete (${completionPct}%)`;
+
+                              return (
+                                <div key={kr.id} className="space-y-2 py-3 px-4 rounded-xl text-left" style={{ background: '#F7F4EE' }}>
+                                  <div className="flex justify-between items-start gap-4">
+                                    <span className="text-sm font-semibold leading-snug" style={{ color: '#1A1A1A' }}>{kr.kr_text}</span>
+                                    <span className="text-[10px] font-bold font-mono text-[#6B6558] shrink-0 mt-0.5">{statLabel}</span>
+                                  </div>
+                                  <div className="w-full bg-[#E8E2D6] h-1 rounded-full overflow-hidden">
+                                    <div className="bg-[#3B4B6B] h-full rounded-full transition-all duration-300" style={{ width: `${kr.progress_pct}%` }} />
+                                  </div>
+                                  {subtasks.length > 0 && (
+                                    <div className="space-y-1 pt-1.5 pl-1">
+                                      {subtasks.map(st => (
+                                        <div key={st.id} className="flex items-center gap-2 text-xs">
+                                          <input 
+                                            type="checkbox" 
+                                            checked={st.is_complete} 
+                                            disabled 
+                                            className="rounded border-[#E8E2D6] text-[#3B4B6B] w-3.5 h-3.5 cursor-not-allowed"
+                                          />
+                                          <span className={st.is_complete ? 'line-through text-[#A89F92]' : 'text-[#6B6558] font-medium'}>
+                                            {st.title}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );

@@ -41,7 +41,8 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (save
             kr_text: kr.kr_text,
             target_value: kr.target_value ? Number(kr.target_value) : null,
             unit: kr.unit || null,
-            suggested_metric_text: kr.suggested_metric
+            suggested_metric_text: kr.suggested_metric,
+            subtasks: kr.suggested_subtasks || []
           }))
         })
       });
@@ -225,6 +226,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
         status: 'draft', cycle: 'Q3-2026', ai_generated: true,
         key_results: item.key_results.map((kr: any, j: number) => ({
           id: `temp-kr-${i}-${j}`, kr_text: kr.text, suggested_metric: kr.suggested_metric,
+          suggested_subtasks: kr.suggested_subtasks || [],
           current_value: 0, progress_pct: 0
         }))
       })));

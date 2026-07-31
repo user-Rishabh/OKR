@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Target, Sparkles, Loader2, Trash2, Calendar, LayoutDashboard, Compass, Activity, CheckCircle2, Circle, AlertCircle, X, Check, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Target, Sparkles, Loader2, Trash2, Calendar, LayoutDashboard, Compass, Activity, CheckCircle2, Circle, AlertCircle, X, Check, ChevronUp, ChevronDown, CheckSquare } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
 import { useAuth } from '../context/AuthContext';
@@ -22,12 +22,7 @@ export default function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
   const [expandedKRs, setExpandedKRs] = useState<Record<string, boolean>>({});
-  const [activeUpdateKrId, setActiveUpdateKrId] = useState<string | null>(null);
-  const [updateText, setUpdateText] = useState('');
-  const [isEstimating, setIsEstimating] = useState(false);
-  const [aiEstimate, setAiEstimate] = useState<{ estimated_progress_pct: number; reasoning: string } | null>(null);
-  const [proposedProgress, setProposedProgress] = useState<number>(0);
-  const [isSavingUpdate, setIsSavingUpdate] = useState(false);
+  const [newSubtaskTexts, setNewSubtaskTexts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [nudges, setNudges] = useState<Record<string, { text: string; loading: boolean }>>({});
   const context = useOutletContext<{ activeTab: 'overview' | 'goals' | 'checkins'; setActiveTab: (t: 'overview' | 'goals' | 'checkins') => void } | null>();
@@ -67,6 +62,17 @@ export default function Dashboard() {
     activeGoals.forEach(g => g.key_results.forEach(kr => { total += kr.progress_pct; count++; }));
     return count > 0 ? total / count : 0;
   })();
+  const workCompletedStats = (() => {
+    let totalSubtasks = 0;
+    let completedSubtasks = 0;
+    activeGoals.forEach(g => g.key_results.forEach(kr => {
+      const subtasks = kr.kr_subtasks || [];
+      totalSubtasks += subtasks.length;
+      completedSubtasks += subtasks.filter(s => s.is_complete).length;
+    }));
+    const percentage = totalSubtasks > 0 ? Math.round((completedSubtasks / totalSubtasks) * 100) : 0;
+    return { completed: completedSubtasks, total: totalSubtasks, percentage };
+  })();
   const alignmentScore = activeGoals.length > 0
     ? Math.round((activeGoals.filter(g => g.pillar_id !== null).length / activeGoals.length) * 100)
     : 0;
@@ -101,36 +107,49 @@ export default function Dashboard() {
     }
   };
 
-  const handleGetAiEstimate = async (krId: string) => {
-    if (!updateText.trim()) return;
-    setIsEstimating(true); setAiEstimate(null);
+  const handleToggleSubtask = async (subtaskId: string, isComplete: boolean) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/key-results/${krId}/estimate-progress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ update_text: updateText })
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setAiEstimate(data);
-      setProposedProgress(data.estimated_progress_pct);
-    } catch { alert('Failed to get AI estimate. You can still adjust manually.'); }
-    finally { setIsEstimating(false); }
-  };
-
-  const handleSaveUpdate = async (krId: string) => {
-    setIsSavingUpdate(true);
-    try {
-      const res = await fetch(`http://localhost:8000/api/key-results/${krId}`, {
+      const res = await fetch(`http://localhost:8000/api/subtasks/${subtaskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ progress_pct: proposedProgress, note: updateText, reasoning: aiEstimate?.reasoning })
+        body: JSON.stringify({ is_complete: isComplete })
       });
       if (!res.ok) throw new Error();
       await fetchGoals();
-      setActiveUpdateKrId(null); setUpdateText(''); setAiEstimate(null);
-    } catch { alert('Failed to save progress update.'); }
-    finally { setIsSavingUpdate(false); }
+    } catch {
+      alert('Failed to update subtask.');
+    }
+  };
+
+  const handleAddSubtask = async (krId: string) => {
+    const title = newSubtaskTexts[krId]?.trim();
+    if (!title) return;
+
+    try {
+      const res = await fetch(`http://localhost:8000/api/key-results/${krId}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ title })
+      });
+      if (!res.ok) throw new Error();
+      setNewSubtaskTexts(prev => ({ ...prev, [krId]: '' }));
+      await fetchGoals();
+    } catch {
+      alert('Failed to add subtask.');
+    }
+  };
+
+  const handleDeleteSubtask = async (subtaskId: string) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/subtasks/${subtaskId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session?.access_token}` }
+      });
+      if (!res.ok) throw new Error();
+      await fetchGoals();
+    } catch {
+      alert('Failed to delete subtask.');
+    }
   };
 
   const handleDeleteGoal = async (goalId: string) => {
@@ -226,6 +245,26 @@ export default function Dashboard() {
                   <div className="w-16 h-16 rounded-full flex items-center justify-center bg-[#EFF6FF] border border-[#BFDBFE]" style={{ color: '#2563EB' }}>
                     <Calendar size={24} />
                   </div>
+                </div>
+              </div>
+
+              {/* Work Completed Summary */}
+              <div className="card p-6 bg-white border border-[#E8E2D6] rounded-2xl relative overflow-hidden shadow-sm">
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#3B4B6B] to-[#5C7299]" />
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#6B6558] flex items-center gap-1.5">
+                    <CheckSquare size={16} className="text-[#3B4B6B]" />
+                    Work Completed
+                  </h3>
+                  <span className="text-sm font-bold text-[#3B4B6B]">
+                    {workCompletedStats.completed} of {workCompletedStats.total} subtasks complete — {workCompletedStats.percentage}%
+                  </span>
+                </div>
+                <div className="w-full bg-[#F0EDE6] h-3 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-gradient-to-r from-[#3B4B6B] to-[#5C7299] h-full rounded-full transition-all duration-500" 
+                    style={{ width: `${workCompletedStats.percentage}%` }}
+                  />
                 </div>
               </div>
 
@@ -401,139 +440,121 @@ export default function Dashboard() {
                           {/* Key results */}
                           {goal.key_results.map(kr => {
                             const isExpanded = !!expandedKRs[kr.id];
+                            const subtasks = kr.kr_subtasks || [];
+                            const totalSubtasks = subtasks.length;
+                            const completedSubtasks = subtasks.filter(s => s.is_complete).length;
+                            const completionPct = Math.round(kr.progress_pct);
+                            const statLabel = `${completedSubtasks} of ${totalSubtasks} complete (${completionPct}%)`;
+
                             return (
                               <div key={kr.id} className="space-y-3">
                                 <div 
                                   className="card p-5 flex items-center justify-between gap-4 cursor-pointer"
                                   onClick={() => setExpandedKRs(p => ({ ...p, [kr.id]: !p[kr.id] }))}
                                 >
-                                  <div className="flex-1 space-y-1">
+                                  <div className="flex-grow space-y-1 text-left">
                                     <p className="text-sm font-semibold leading-snug" style={{ color: '#1A1A1A' }}>{kr.kr_text}</p>
                                     {kr.suggested_metric && <p className="text-xs" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</p>}
+                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mt-2">
+                                      <span>{statLabel}</span>
+                                    </div>
+                                    <div className="w-full bg-[#E8E2D6] h-1.5 rounded-full overflow-hidden mt-1">
+                                      <div className="bg-[#3B4B6B] h-full rounded-full transition-all duration-300" style={{ width: `${kr.progress_pct}%` }} />
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-3">
-                                    <ProgressRing progress={kr.progress_pct} size={40} strokeWidth={4} showText={false} />
-                                    <span className="text-xs font-bold font-mono w-10 text-right" style={{ color: '#1A1A1A' }}>{kr.progress_pct}%</span>
+                                  <div className="flex items-center shrink-0 pl-2">
                                     {isExpanded ? <ChevronUp size={16} className="text-[#6B6558]" /> : <ChevronDown size={16} className="text-[#6B6558]" />}
                                   </div>
                                 </div>
 
-                                {activeUpdateKrId === kr.id ? (
-                                  <div className="p-5 rounded-xl space-y-4" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
+                                {isExpanded && (
+                                  <div className="p-5 rounded-xl bg-white border border-[#E8E2D6] space-y-4">
+                                    {/* Subtasks Checklist */}
                                     <div>
-                                      <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>What did you work on?</label>
-                                      <textarea
-                                        rows={2} value={updateText} onChange={e => setUpdateText(e.target.value)}
-                                        placeholder="e.g. Completed initial research, set up repository boilerplates"
-                                        className="w-full px-4 py-3 text-xs rounded-xl resize-none"
-                                        style={{ background: '#FFFFFF' }}
-                                      />
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleGetAiEstimate(kr.id)}
-                                        disabled={!updateText.trim() || isEstimating}
-                                        className="gradient-button flex items-center gap-1.5 text-xs font-bold px-4 py-2.5 rounded-lg cursor-pointer"
-                                      >
-                                        {isEstimating ? <><Loader2 size={12} className="animate-spin" />Estimating...</> : <><Sparkles size={12} />Get AI Estimate</>}
-                                      </button>
-                                      <button onClick={() => setActiveUpdateKrId(null)} className="px-4 py-2.5 rounded-lg text-xs font-semibold cursor-pointer flex items-center gap-1.5" style={{ background: '#F0EDE6', color: '#1A1A1A' }}>
-                                        <X size={12} /> Cancel
-                                      </button>
-                                    </div>
-
-                                    {aiEstimate && (
-                                      <div className="p-4 rounded-xl space-y-1" style={{ background: '#ECFDF5', border: '1px solid #A7F3D0' }}>
-                                        <div className="flex items-center gap-2">
-                                          <Sparkles size={13} style={{ color: '#10B981' }} />
-                                          <p className="text-xs font-bold" style={{ color: '#059669' }}>AI Estimate: {aiEstimate.estimated_progress_pct}%</p>
-                                        </div>
-                                        <p className="text-xs italic pl-5" style={{ color: '#6B6558' }}>"{aiEstimate.reasoning}"</p>
-                                      </div>
-                                    )}
-
-                                    <div className="space-y-2 pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
-                                      <div className="flex justify-between items-center text-xs">
-                                        <span className="font-semibold" style={{ color: '#6B6558' }}>Proposed Progress:</span>
-                                        <span className="font-bold font-mono px-2.5 py-0.5 rounded" style={{ background: '#F0EDE6', color: '#1A1A1A' }}>{proposedProgress}%</span>
-                                      </div>
-                                      <div className="flex items-center gap-3">
-                                        <input type="range" min="0" max="100" value={proposedProgress}
-                                          onChange={e => setProposedProgress(parseInt(e.target.value))}
-                                          className="flex-1 cursor-pointer" style={{ accentColor: '#F2994A' }}
-                                        />
-                                        <div className="flex gap-1.5">
-                                          {['-', '+'].map((op, idx) => (
-                                            <button key={op} onClick={() => setProposedProgress(p => Math.max(0, Math.min(100, idx === 0 ? p - 1 : p + 1)))}
-                                              className="w-7 h-7 rounded font-bold text-xs cursor-pointer"
-                                              style={{ background: '#F0EDE6', color: '#1A1A1A' }}>{op}</button>
+                                      <p className="text-xs font-bold uppercase tracking-wider font-mono text-[#6B6558] mb-3">Subtask Checklist</p>
+                                      {subtasks.length === 0 ? (
+                                        <p className="text-xs italic text-[#6B6558] mb-3">No subtasks created yet.</p>
+                                      ) : (
+                                        <div className="space-y-2">
+                                          {subtasks.map(st => (
+                                            <div key={st.id} className="flex items-center justify-between group py-1">
+                                              <label className="flex items-center gap-2.5 cursor-pointer text-xs flex-1 text-left">
+                                                <input 
+                                                  type="checkbox" 
+                                                  checked={st.is_complete} 
+                                                  onChange={() => handleToggleSubtask(st.id, !st.is_complete)}
+                                                  className="rounded border-[#E8E2D6] text-[#3B4B6B] focus:ring-0 cursor-pointer w-4 h-4"
+                                                />
+                                                <span className={`transition-all ${st.is_complete ? 'line-through text-[#A89F92]' : 'text-[#1A1A1A] font-medium'}`}>
+                                                  {st.title}
+                                                </span>
+                                              </label>
+                                              <button
+                                                onClick={() => handleDeleteSubtask(st.id)}
+                                                className="opacity-0 group-hover:opacity-100 p-1 text-[#A89F92] hover:text-[#EB5757] rounded cursor-pointer transition-opacity"
+                                                title="Delete Subtask"
+                                              >
+                                                <X size={12} />
+                                              </button>
+                                            </div>
                                           ))}
                                         </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                      <button onClick={() => handleSaveUpdate(kr.id)} disabled={isSavingUpdate}
-                                        className="gradient-button text-xs font-bold px-5 py-2.5 rounded-lg cursor-pointer flex items-center gap-1.5">
-                                        {isSavingUpdate ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                                        Confirm & Save
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-3">
-                                    <div className="flex justify-end">
-                                      <button onClick={() => { setActiveUpdateKrId(kr.id); setUpdateText(''); setAiEstimate(null); setProposedProgress(kr.progress_pct); }}
-                                        className="text-xs font-semibold px-4 py-2 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5"
-                                        style={{ background: '#FFFFFF', border: '1px solid #E8E2D6', color: '#6B6558' }}
-                                        onMouseOver={e => e.currentTarget.style.borderColor = '#F2994A'}
-                                        onMouseOut={e => e.currentTarget.style.borderColor = '#E8E2D6'}
+                                      )}
+                                      
+                                      {/* Add Subtask Form */}
+                                      <form 
+                                        onSubmit={(e) => { e.preventDefault(); handleAddSubtask(kr.id); }}
+                                        className="flex gap-2 mt-4"
                                       >
-                                        <Activity size={12} /> Log Update
-                                      </button>
+                                        <input 
+                                          type="text"
+                                          placeholder="Add a new subtask..."
+                                          value={newSubtaskTexts[kr.id] || ''}
+                                          onChange={(e) => setNewSubtaskTexts(prev => ({ ...prev, [kr.id]: e.target.value }))}
+                                          className="flex-1 px-3 py-1.5 text-xs bg-[#F7F4EE] border border-[#E8E2D6] rounded-xl focus:border-[#3B4B6B] focus:ring-0"
+                                        />
+                                        <button 
+                                          type="submit"
+                                          className="px-3 py-1.5 bg-[#3B4B6B] text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-[#5C7299]"
+                                        >
+                                          Add
+                                        </button>
+                                      </form>
                                     </div>
 
-                                    {isExpanded && (
-                                      <div className="p-5 rounded-xl bg-white border border-[#E8E2D6] space-y-4">
-                                        <p className="text-xs font-bold uppercase tracking-wider font-mono text-[#6B6558]">Activity Timeline</p>
-                                        {!kr.progress_logs?.length ? (
-                                          <p className="text-xs italic text-[#6B6558]">No activity logged for this key result.</p>
-                                        ) : (
-                                          <div className="relative pl-6 space-y-5 border-l-2 border-[#E8E2D6]">
-                                            {kr.progress_logs.map(log => (
-                                              <div key={log.id} className="relative">
-                                                <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3B4B6B] border-2 border-white" />
-                                                <div className="text-xs space-y-1.5 text-left">
-                                                  <div className="flex flex-wrap items-center gap-2 text-[#6B6558]">
-                                                    <span className="font-semibold font-mono">
-                                                      {new Date(log.created_at).toLocaleDateString()} at {new Date(log.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                    <span>·</span>
-                                                    <span>by <span className="font-bold text-[#1A1A1A]">{log.users?.full_name || 'System'}</span></span>
-                                                    <span>·</span>
-                                                    <span className="font-mono font-bold px-2 py-0.5 rounded-md bg-[#EEF1F7] text-[#3B4B6B] border border-[#D4DAE6]">
-                                                      {log.previous_value}% → {log.new_value}%
-                                                    </span>
-                                                  </div>
-                                                  {log.note && (
-                                                    <p className="italic text-xs leading-relaxed pl-3 max-w-lg py-2 border-l-2 border-[#10B981] text-[#1A1A1A] bg-[#ECFDF5] rounded-r-lg">
-                                                      "{log.note}"
-                                                    </p>
-                                                  )}
-                                                  {log.reasoning && (
-                                                    <div className="flex items-start gap-1.5 text-xs px-3 py-2 rounded-xl max-w-lg leading-relaxed bg-[#FFF7ED] border border-[#FED7AA] text-[#C2410C]">
-                                                      <Sparkles size={11} className="shrink-0 mt-1" />
-                                                      <span><span className="font-semibold">AI Interpretation:</span> {log.reasoning}</span>
-                                                    </div>
-                                                  )}
+                                    {/* Activity Timeline */}
+                                    <div className="pt-4 border-t border-[#E8E2D6] space-y-3">
+                                      <p className="text-xs font-bold uppercase tracking-wider font-mono text-[#6B6558]">Activity Timeline</p>
+                                      {!kr.progress_logs?.length ? (
+                                        <p className="text-xs italic text-[#6B6558]">No activity logged for this key result.</p>
+                                      ) : (
+                                        <div className="relative pl-6 space-y-4 border-l-2 border-[#E8E2D6]">
+                                          {kr.progress_logs.map(log => (
+                                            <div key={log.id} className="relative">
+                                              <div className="absolute -left-[29px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#3B4B6B] border-2 border-white" />
+                                              <div className="text-xs space-y-1 text-left">
+                                                <div className="flex flex-wrap items-center gap-2 text-[#6B6558]">
+                                                  <span className="font-semibold font-mono">
+                                                    {new Date(log.created_at).toLocaleDateString()} at {new Date(log.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                                                  </span>
+                                                  <span>·</span>
+                                                  <span>by <span className="font-bold text-[#1A1A1A]">{log.users?.full_name || 'System'}</span></span>
+                                                  <span>·</span>
+                                                  <span className="font-mono font-bold px-2 py-0.5 rounded-md bg-[#EEF1F7] text-[#3B4B6B] border border-[#D4DAE6]">
+                                                    {log.previous_value}% → {log.new_value}%
+                                                  </span>
                                                 </div>
+                                                {log.note && (
+                                                  <p className="italic text-xs leading-relaxed pl-3 max-w-lg py-1.5 border-l-2 border-[#10B981] text-[#1A1A1A] bg-[#ECFDF5] rounded-r-lg">
+                                                    "{log.note}"
+                                                  </p>
+                                                )}
                                               </div>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    )}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                               </div>

