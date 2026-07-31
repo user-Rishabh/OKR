@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { Plus, Target, Sparkles, Loader2, Trash2, Calendar, LayoutDashboard, Compass, Activity, CheckCircle2, Circle, AlertCircle, X, Check, ChevronUp, ChevronDown, CheckSquare } from 'lucide-react';
+import { Plus, Target, Sparkles, Trash2, Calendar, Compass, CheckCircle2, Circle, AlertCircle, X, ChevronUp, ChevronDown, CheckSquare } from 'lucide-react';
 import type { Goal, KeyResult } from '../types';
 import GoalModal from '../components/GoalModal';
 import { useAuth } from '../context/AuthContext';
@@ -24,11 +24,8 @@ export default function Dashboard() {
   const [expandedKRs, setExpandedKRs] = useState<Record<string, boolean>>({});
   const [newSubtaskTexts, setNewSubtaskTexts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
-  const [nudges, setNudges] = useState<Record<string, { text: string; loading: boolean }>>({});
-  const context = useOutletContext<{ activeTab: 'overview' | 'goals' | 'checkins'; setActiveTab: (t: 'overview' | 'goals' | 'checkins') => void } | null>();
+  const context = useOutletContext<{ activeTab: 'overview' | 'goals'; setActiveTab: (t: 'overview' | 'goals') => void } | null>();
   const activeTab = context?.activeTab ?? 'overview';
-  const setActiveTab = context?.setActiveTab ?? (() => {});
-  const [generatedNudges, setGeneratedNudges] = useState<Array<{ id: string; objective: string; text: string; date: string }>>([]);
   const { currentUser, session, loading: authLoading } = useAuth();
 
   /* ─── data fetch ──────────────────────────────────────────── */
@@ -86,26 +83,6 @@ export default function Dashboard() {
 
   /* ─── handlers ────────────────────────────────────────────── */
   const handleAddGoal = (goal: Goal) => setActiveGoals(prev => [goal, ...prev]);
-
-  const handleGetNudge = async (goalId: string) => {
-    setNudges(prev => ({ ...prev, [goalId]: { text: '', loading: true } }));
-    try {
-      const res = await fetch(`http://localhost:8000/api/goals/${goalId}/checkin`, {
-        method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' }
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setNudges(prev => ({ ...prev, [goalId]: { text: data.nudge_text, loading: false } }));
-      setGeneratedNudges(prev => [{
-        id: Math.random().toString(),
-        objective: activeGoals.find(g => g.id === goalId)?.objective_text || 'Objective',
-        text: data.nudge_text,
-        date: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-      }, ...prev]);
-    } catch {
-      setNudges(prev => ({ ...prev, [goalId]: { text: 'Failed to generate nudge.', loading: false } }));
-    }
-  };
 
   const handleToggleSubtask = async (subtaskId: string, isComplete: boolean) => {
     try {
@@ -181,8 +158,6 @@ export default function Dashboard() {
           <Plus size={18} /> Create New Goal
         </button>
       </div>
-
-      {/* Tab bar has been moved to left sidebar layout */}
 
       {/* Content */}
       {(loading || authLoading) ? (
@@ -261,8 +236,8 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <div className="w-full bg-[#F0EDE6] h-3 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-gradient-to-r from-[#3B4B6B] to-[#5C7299] h-full rounded-full transition-all duration-500" 
+                  <div
+                    className="bg-gradient-to-r from-[#3B4B6B] to-[#5C7299] h-full rounded-full transition-all duration-500"
                     style={{ width: `${workCompletedStats.percentage}%` }}
                   />
                 </div>
@@ -396,15 +371,6 @@ export default function Dashboard() {
 
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => handleGetNudge(goal.id)}
-                                disabled={nudges[goal.id]?.loading}
-                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border cursor-pointer transition-all"
-                                style={{ background: '#FFF7ED', color: '#C2410C', border: '1px solid #FED7AA' }}
-                              >
-                                {nudges[goal.id]?.loading ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                                AI Check-in
-                              </button>
-                              <button
                                 onClick={() => handleDeleteGoal(goal.id)}
                                 className="p-2 rounded-lg cursor-pointer transition-colors"
                                 style={{ color: '#6B6558' }}
@@ -419,46 +385,21 @@ export default function Dashboard() {
 
                         {/* Goal body */}
                         <div className="p-6 space-y-4" style={{ background: '#FAFAF8' }}>
-                          {/* Nudge panel */}
-                          {nudges[goal.id] && (
-                            <div className="p-4 rounded-xl flex items-start gap-3 relative" style={{ background: '#FFF7ED', border: '1px solid #FED7AA' }}>
-                              <Sparkles size={15} style={{ color: '#F2994A', flexShrink: 0, marginTop: 1 }} />
-                              <div className="flex-1 text-xs leading-relaxed" style={{ color: '#1A1A1A' }}>
-                                {nudges[goal.id].loading
-                                  ? <span style={{ color: '#6B6558' }} className="flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" />Consulting AI OKR coach...</span>
-                                  : nudges[goal.id].text}
-                              </div>
-                              {!nudges[goal.id].loading && (
-                                <button
-                                  onClick={() => setNudges(prev => { const n = { ...prev }; delete n[goal.id]; return n; })}
-                                  className="cursor-pointer text-base leading-none" style={{ color: '#6B6558' }}
-                               >×</button>
-                              )}
-                            </div>
-                          )}
-
                           {/* Key results */}
                           {goal.key_results.map(kr => {
                             const isExpanded = !!expandedKRs[kr.id];
                             const subtasks = kr.kr_subtasks || [];
-                            const totalSubtasks = subtasks.length;
-                            const completedSubtasks = subtasks.filter(s => s.is_complete).length;
-                            const completionPct = Math.round(kr.progress_pct);
-                            const statLabel = `${completedSubtasks} of ${totalSubtasks} complete (${completionPct}%)`;
 
                             return (
                               <div key={kr.id} className="space-y-3">
-                                <div 
+                                <div
                                   className="card p-5 flex items-center justify-between gap-4 cursor-pointer"
                                   onClick={() => setExpandedKRs(p => ({ ...p, [kr.id]: !p[kr.id] }))}
                                 >
                                   <div className="flex-grow space-y-1 text-left">
                                     <p className="text-sm font-semibold leading-snug" style={{ color: '#1A1A1A' }}>{kr.kr_text}</p>
                                     {kr.suggested_metric && <p className="text-xs" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</p>}
-                                    <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mt-2">
-                                      <span>{statLabel}</span>
-                                    </div>
-                                    <div className="w-full bg-[#E8E2D6] h-1.5 rounded-full overflow-hidden mt-1">
+                                    <div className="w-full bg-[#E8E2D6] h-1.5 rounded-full overflow-hidden mt-2">
                                       <div className="bg-[#3B4B6B] h-full rounded-full transition-all duration-300" style={{ width: `${kr.progress_pct}%` }} />
                                     </div>
                                   </div>
@@ -479,9 +420,9 @@ export default function Dashboard() {
                                           {subtasks.map(st => (
                                             <div key={st.id} className="flex items-center justify-between group py-1">
                                               <label className="flex items-center gap-2.5 cursor-pointer text-xs flex-1 text-left">
-                                                <input 
-                                                  type="checkbox" 
-                                                  checked={st.is_complete} 
+                                                <input
+                                                  type="checkbox"
+                                                  checked={st.is_complete}
                                                   onChange={() => handleToggleSubtask(st.id, !st.is_complete)}
                                                   className="rounded border-[#E8E2D6] text-[#3B4B6B] focus:ring-0 cursor-pointer w-4 h-4"
                                                 />
@@ -500,20 +441,20 @@ export default function Dashboard() {
                                           ))}
                                         </div>
                                       )}
-                                      
+
                                       {/* Add Subtask Form */}
-                                      <form 
+                                      <form
                                         onSubmit={(e) => { e.preventDefault(); handleAddSubtask(kr.id); }}
                                         className="flex gap-2 mt-4"
                                       >
-                                        <input 
+                                        <input
                                           type="text"
                                           placeholder="Add a new subtask..."
                                           value={newSubtaskTexts[kr.id] || ''}
                                           onChange={(e) => setNewSubtaskTexts(prev => ({ ...prev, [kr.id]: e.target.value }))}
                                           className="flex-1 px-3 py-1.5 text-xs bg-[#F7F4EE] border border-[#E8E2D6] rounded-xl focus:border-[#3B4B6B] focus:ring-0"
                                         />
-                                        <button 
+                                        <button
                                           type="submit"
                                           className="px-3 py-1.5 bg-[#3B4B6B] text-white text-xs font-bold rounded-xl cursor-pointer hover:bg-[#5C7299]"
                                         >
@@ -564,37 +505,6 @@ export default function Dashboard() {
                       </div>
                     );
                   })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Check-ins tab ─────────────────────────────── */}
-          {activeTab === 'checkins' && (
-            <div className="space-y-5 animate-stagger-1">
-              <h2 style={{ fontFamily: 'Clash Display, Inter, sans-serif', fontWeight: 700, fontSize: 22, color: '#1A1A1A' }}>
-                AI Coach Check-ins
-              </h2>
-              {generatedNudges.length === 0 ? (
-                <div className="rounded-2xl p-14 flex flex-col items-center text-center" style={{ border: '2px dashed #E8E2D6' }}>
-                  <div className="icon-badge icon-badge-orange w-14 h-14 rounded-full mb-4"><Sparkles size={24} /></div>
-                  <h3 className="font-bold" style={{ color: '#1A1A1A' }}>No check-in nudges generated</h3>
-                  <p className="text-sm mt-1 max-w-sm" style={{ color: '#6B6558' }}>Go to "My Goals" and request an AI check-in nudge for an active objective.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {generatedNudges.map(n => (
-                    <div key={n.id} className="card card-top-orange p-5 space-y-3">
-                      <div className="flex justify-between items-center flex-wrap gap-2">
-                        <span className="pill-orange"><Sparkles size={10} style={{ display: 'inline', marginRight: 2 }} />AI Nudge</span>
-                        <span className="text-xs font-mono flex items-center gap-1" style={{ color: '#6B6558' }}>
-                          <Calendar size={12} />{n.date}
-                        </span>
-                      </div>
-                      <p className="text-xs font-bold uppercase tracking-wider font-mono" style={{ color: '#6B6558' }}>"{n.objective}"</p>
-                      <p className="text-sm italic leading-relaxed pl-4" style={{ borderLeft: '3px solid #F2994A', color: '#1A1A1A' }}>"{n.text}"</p>
-                    </div>
-                  ))}
                 </div>
               )}
             </div>

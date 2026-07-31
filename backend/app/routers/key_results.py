@@ -33,8 +33,8 @@ def recalculate_kr_progress(kr_id: str, current_user_id: str, subtask_title: Opt
     # Update key_result progress_pct
     supabase.table("key_results").update({"progress_pct": new_pct}).eq("id", kr_id).execute()
 
-    # Log to progress_logs if subtask details are provided
-    if subtask_title is not None and is_complete is not None:
+    # Only log if the percentage actually changed AND subtask details are provided
+    if subtask_title is not None and is_complete is not None and new_pct != prev_pct:
         status_text = "completed" if is_complete else "reopened"
         log_data = {
             "key_result_id": kr_id,
@@ -47,6 +47,7 @@ def recalculate_kr_progress(kr_id: str, current_user_id: str, subtask_title: Opt
         supabase.table("progress_logs").insert(log_data).execute()
     
     return new_pct
+
 
 @router.patch("/{kr_id}")
 async def update_key_result(kr_id: str, update_data: KeyResultUpdate, current_user: dict = Depends(get_current_user)):

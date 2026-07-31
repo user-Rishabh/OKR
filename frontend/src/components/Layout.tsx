@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { LogOut, Target, LayoutDashboard, Users, Settings, ChevronLeft, ChevronRight, Menu, X, Sparkles, MessageSquare } from 'lucide-react';
+import { LogOut, Target, LayoutDashboard, Users, Settings, ChevronLeft, ChevronRight, Menu, X, MessageSquare } from 'lucide-react';
 
 export default function Layout() {
   const location = useLocation();
@@ -12,8 +12,8 @@ export default function Layout() {
   // Navigation states
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'goals'>('overview');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'goals' | 'checkins'>('overview');
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', roles: ['employee', 'manager', 'admin'], icon: LayoutDashboard },
@@ -98,12 +98,12 @@ export default function Layout() {
                             className="absolute left-1 right-0 h-10 bg-gradient-to-r from-[#3B4B6B]/15 to-[#5C7299]/5 border-l-4 border-[#3B4B6B] rounded-r-lg transition-transform duration-200 ease-out pointer-events-none"
                             style={{
                               top: '4px',
-                              transform: `translateY(${activeTab === 'overview' ? 0 : activeTab === 'goals' ? 48 : 96}px)`
+                              transform: `translateY(${activeTab === 'overview' ? 0 : 48}px)`
                             }}
                           />
-                          {(['overview', 'goals', 'checkins'] as const).map((tab) => {
-                            const subLabel = tab === 'overview' ? 'Overview' : tab === 'goals' ? 'My Goals' : 'Check-ins';
-                            const subIcon = tab === 'overview' ? LayoutDashboard : tab === 'goals' ? Target : Sparkles;
+                          {(['overview', 'goals'] as const).map((tab) => {
+                            const subLabel = tab === 'overview' ? 'Overview' : 'My Goals';
+                            const subIcon = tab === 'overview' ? LayoutDashboard : Target;
                             const isSubActive = activeTab === tab;
                             return (
                               <button
@@ -252,14 +252,14 @@ export default function Layout() {
                           className="absolute left-1 right-0 h-10 bg-gradient-to-r from-[#3B4B6B]/15 to-[#5C7299]/5 border-l-4 border-[#3B4B6B] rounded-r-lg transition-transform duration-200 ease-out pointer-events-none"
                           style={{
                             top: '4px',
-                            transform: `translateY(${activeTab === 'overview' ? 0 : activeTab === 'goals' ? 48 : 96}px)`
+                            transform: `translateY(${activeTab === 'overview' ? 0 : 48}px)`
                           }}
                         />
                       )}
 
-                      {(['overview', 'goals', 'checkins'] as const).map((tab) => {
-                        const subLabel = tab === 'overview' ? 'Overview' : tab === 'goals' ? 'My Goals' : 'Check-ins';
-                        const subIcon = tab === 'overview' ? LayoutDashboard : tab === 'goals' ? Target : Sparkles;
+                      {(['overview', 'goals'] as const).map((tab) => {
+                        const subLabel = tab === 'overview' ? 'Overview' : 'My Goals';
+                        const subIcon = tab === 'overview' ? LayoutDashboard : Target;
                         const isSubActive = activeTab === tab;
                         return (
                           <div key={tab} className="relative group/sub">

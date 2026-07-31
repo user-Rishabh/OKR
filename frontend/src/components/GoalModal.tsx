@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Check, Edit2, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { X, Check, Edit2, Sparkles, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import type { Goal } from '../types';
 import { useAuth } from '../context/AuthContext';
 
@@ -11,20 +11,55 @@ interface GoalModalProps {
   userId: string;
 }
 
+/* ─── Suggested Goal Card ─────────────────────────────────────── */
 function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (savedGoal: Goal, tempId: string) => void; userId: string }) {
   const [localGoal, setLocalGoal] = useState<Goal>(goal);
   const [isSaving, setIsSaving] = useState(false);
   const { session } = useAuth();
 
-  // Objective editing state
-  const [isEditingObjective, setIsEditingObjective] = useState(false);
-  const [objectiveText, setObjectiveText] = useState(goal.objective_text);
-
-  // Key Results editing state
+  // KR editing (text + metric only; subtasks edited inline per-KR)
   const [editingKrId, setEditingKrId] = useState<string | null>(null);
   const [krText, setKrText] = useState('');
   const [krMetric, setKrMetric] = useState('');
 
+  // New subtask input per KR
+  const [newSubtaskInputs, setNewSubtaskInputs] = useState<Record<string, string>>({});
+
+  /* helpers — always use functional setLocalGoal to avoid stale closure bugs */
+  const updateKR = (krId: string, patch: Partial<typeof localGoal.key_results[0]>) => {
+    setLocalGoal(prev => ({
+      ...prev,
+      key_results: prev.key_results.map(k => k.id === krId ? { ...k, ...patch } : k)
+    }));
+  };
+
+  const addSubtask = (krId: string) => {
+    const title = (newSubtaskInputs[krId] || '').trim();
+    if (!title) return;
+    // Use functional updater so we always read the LATEST suggested_subtasks array
+    setLocalGoal(prev => ({
+      ...prev,
+      key_results: prev.key_results.map(k =>
+        k.id === krId
+          ? { ...k, suggested_subtasks: [...(k.suggested_subtasks || []), title] }
+          : k
+      )
+    }));
+    setNewSubtaskInputs(prev => ({ ...prev, [krId]: '' }));
+  };
+
+  const removeSubtask = (krId: string, idx: number) => {
+    setLocalGoal(prev => ({
+      ...prev,
+      key_results: prev.key_results.map(k =>
+        k.id === krId
+          ? { ...k, suggested_subtasks: (k.suggested_subtasks || []).filter((_, i) => i !== idx) }
+          : k
+      )
+    }));
+  };
+
+  /* save to backend */
   const handleSave = async () => {
     setIsSaving(true);
     try {
@@ -54,130 +89,149 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (save
 
   return (
     <div className="card card-top-blue p-5 space-y-4 text-left">
+      {/* Objective — read-only title */}
       <div className="flex justify-between items-start gap-4">
         <div className="flex-1">
-          {isEditingObjective ? (
-            <div className="flex items-center gap-2 w-full">
-              <input
-                type="text"
-                value={objectiveText}
-                onChange={e => setObjectiveText(e.target.value)}
-                className="flex-1 px-3 py-1.5 text-sm bg-[#F7F4EE] border border-[#E8E2D6] rounded-xl focus:border-[#3B4B6B] focus:ring-0 font-bold"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setLocalGoal(prev => ({ ...prev, objective_text: objectiveText }));
-                  setIsEditingObjective(false);
-                }}
-                className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer flex items-center justify-center"
-                title="Save Objective"
-              >
-                <Check size={14} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{localGoal.objective_text}</h4>
-              <button
-                type="button"
-                onClick={() => {
-                  setObjectiveText(localGoal.objective_text);
-                  setIsEditingObjective(true);
-                }}
-                className="p-1 text-[#6B6558] hover:text-[#3B4B6B] hover:bg-[#F7F4EE] rounded cursor-pointer flex items-center justify-center shrink-0"
-                title="Edit Objective"
-              >
-                <Edit2 size={13} />
-              </button>
-            </div>
-          )}
+          <h4 className="font-bold text-base leading-snug" style={{ color: '#1A1A1A' }}>{localGoal.objective_text}</h4>
           <span className="pill-blue mt-2 inline-flex">
             {localGoal.pillar_title || 'No Pillar'}
           </span>
         </div>
       </div>
 
+      {/* Key Results */}
       <div className="space-y-2">
         <p className="text-xs font-bold uppercase tracking-wider text-[#6B6558]">Key Results</p>
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {localGoal.key_results.map((kr) => {
             const isEditing = editingKrId === kr.id;
+            const subtasks = kr.suggested_subtasks || [];
+
             return (
-              <li key={kr.id} className="flex items-start gap-2 text-sm">
-                <span className="mt-1 flex-shrink-0 text-[#3B4B6B]">•</span>
-                {isEditing ? (
-                  <div className="flex-1 flex flex-col gap-2 p-3 bg-[#F7F4EE] border border-[#E8E2D6] rounded-xl">
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mb-1">Key Result Text</label>
-                      <input
-                        type="text"
-                        value={krText}
-                        onChange={e => setKrText(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#E8E2D6] rounded-lg"
-                      />
+              <li key={kr.id} className="rounded-xl border border-[#E8E2D6] overflow-hidden">
+                {/* KR header */}
+                <div className="flex items-start gap-2 p-3 bg-[#FAFAF8]">
+                  <span className="mt-1 flex-shrink-0 text-[#3B4B6B] font-bold">•</span>
+                  {isEditing ? (
+                    <div className="flex-1 flex flex-col gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mb-1">Key Result Text</label>
+                        <input
+                          type="text"
+                          value={krText}
+                          onChange={e => setKrText(e.target.value)}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#E8E2D6] rounded-lg"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mb-1">Target / Metric</label>
+                        <input
+                          type="text"
+                          value={krMetric}
+                          onChange={e => setKrMetric(e.target.value)}
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#E8E2D6] rounded-lg"
+                          placeholder="e.g. 50% reduction"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            updateKR(kr.id, { kr_text: krText, suggested_metric: krMetric });
+                            setEditingKrId(null);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1"
+                        >
+                          <Check size={12} /> Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingKrId(null)}
+                          className="px-2.5 py-1 bg-white border border-[#E8E2D6] text-[#6B6558] text-xs font-bold rounded-lg cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-[#6B6558] mb-1">Target/Metric</label>
-                      <input
-                        type="text"
-                        value={krMetric}
-                        onChange={e => setKrMetric(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#E8E2D6] rounded-lg"
-                        placeholder="e.g. 50% reduction"
-                      />
-                    </div>
-                    <div className="flex justify-end gap-1.5">
+                  ) : (
+                    <div className="flex-1 flex justify-between items-start gap-2">
+                      <div>
+                        <span className="text-sm text-[#1A1A1A]">{kr.kr_text}</span>
+                        {kr.suggested_metric && (
+                          <span className="text-xs block mt-0.5 font-semibold" style={{ color: '#6B6558' }}>
+                            Target: {kr.suggested_metric}
+                          </span>
+                        )}
+                      </div>
                       <button
                         type="button"
-                        onClick={() => {
-                          setLocalGoal(prev => ({
-                            ...prev,
-                            key_results: prev.key_results.map(k => 
-                              k.id === kr.id ? { ...k, kr_text: krText, suggested_metric: krMetric } : k
-                            )
-                          }));
-                          setEditingKrId(null);
-                        }}
-                        className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg cursor-pointer flex items-center gap-1"
+                        onClick={() => { setKrText(kr.kr_text); setKrMetric(kr.suggested_metric || ''); setEditingKrId(kr.id); }}
+                        className="p-1 text-[#6B6558] hover:text-[#3B4B6B] hover:bg-[#F7F4EE] rounded cursor-pointer shrink-0"
+                        title="Edit Key Result"
                       >
-                        <Check size={12} /> Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingKrId(null)}
-                        className="px-2.5 py-1 bg-white border border-[#E8E2D6] text-[#6B6558] text-xs font-bold rounded-lg cursor-pointer"
-                      >
-                        Cancel
+                        <Edit2 size={12} />
                       </button>
                     </div>
+                  )}
+                </div>
+
+                {/* Subtask checklist preview */}
+                <div className="px-4 py-3 space-y-2 bg-white border-t border-[#E8E2D6]">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#6B6558] flex items-center gap-1">
+                    <Check size={10} className="text-[#3B4B6B]" />
+                    Subtasks
+                    <span className="font-normal normal-case tracking-normal text-[#A89F92]">— will be created on save</span>
+                  </p>
+
+                  {subtasks.length === 0 && (
+                    <p className="text-xs italic text-[#A89F92]">No subtasks yet — add some below.</p>
+                  )}
+
+                  <div className="space-y-1.5">
+                    {subtasks.map((st, idx) => (
+                      <div key={idx} className="flex items-center gap-2 group">
+                        {/* Fake unchecked checkbox for preview */}
+                        <div className="w-3.5 h-3.5 rounded border border-[#C8C2B8] bg-white flex-shrink-0" />
+                        <span className="text-xs flex-1 text-[#1A1A1A]">{st}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeSubtask(kr.id, idx)}
+                          className="opacity-0 group-hover:opacity-100 p-0.5 text-[#A89F92] hover:text-[#EB5757] rounded cursor-pointer transition-opacity"
+                          title="Remove subtask"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <div className="flex-1 flex justify-between items-start gap-2">
-                    <div>
-                      <span className="text-[#1A1A1A]">{kr.kr_text}</span>
-                      {kr.suggested_metric && <span className="text-xs block mt-0.5 font-semibold" style={{ color: '#6B6558' }}>Target: {kr.suggested_metric}</span>}
-                    </div>
+
+                  {/* Add subtask input */}
+                  <form
+                    onSubmit={e => { e.preventDefault(); addSubtask(kr.id); }}
+                    className="flex gap-1.5 mt-2"
+                  >
+                    <input
+                      type="text"
+                      placeholder="Add a subtask..."
+                      value={newSubtaskInputs[kr.id] || ''}
+                      onChange={e => setNewSubtaskInputs(prev => ({ ...prev, [kr.id]: e.target.value }))}
+                      className="flex-1 px-2.5 py-1 text-xs bg-[#F7F4EE] border border-[#E8E2D6] rounded-lg focus:border-[#3B4B6B] focus:ring-0"
+                    />
                     <button
-                      type="button"
-                      onClick={() => {
-                        setKrText(kr.kr_text);
-                        setKrMetric(kr.suggested_metric || '');
-                        setEditingKrId(kr.id);
-                      }}
-                      className="p-1 text-[#6B6558] hover:text-[#3B4B6B] hover:bg-[#F7F4EE]/50 rounded cursor-pointer shrink-0"
-                      title="Edit Key Result"
+                      type="submit"
+                      className="px-2.5 py-1 bg-[#3B4B6B] text-white text-xs font-bold rounded-lg cursor-pointer hover:bg-[#5C7299] flex items-center gap-1"
                     >
-                      <Edit2 size={12} />
+                      <Plus size={11} /> Add
                     </button>
-                  </div>
-                )}
+                  </form>
+                </div>
               </li>
             );
           })}
         </ul>
       </div>
 
+      {/* Accept & Save */}
       <div className="flex justify-end pt-3" style={{ borderTop: '1px solid #E8E2D6' }}>
         <button onClick={handleSave} disabled={isSaving} className="gradient-button flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold cursor-pointer">
           {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
@@ -188,6 +242,7 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (save
   );
 }
 
+/* ─── Main Modal ──────────────────────────────────────────────── */
 export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModalProps) {
   const { currentUser } = useAuth();
   const [step, setStep] = useState<'form' | 'loading' | 'suggestions'>('form');
@@ -221,12 +276,15 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
       if (!suggestRes.ok) throw new Error('Failed to generate suggestions.');
       const data = await suggestRes.json();
       setSuggestions(data.map((item: any, i: number) => ({
-        id: `temp-${i}`, objective_text: item.objective,
+        id: `temp-${i}`,
+        objective_text: item.objective,
         pillar_title: item.aligned_pillar === 'none' ? undefined : item.aligned_pillar,
         status: 'draft', cycle: 'Q3-2026', ai_generated: true,
         key_results: item.key_results.map((kr: any, j: number) => ({
-          id: `temp-kr-${i}-${j}`, kr_text: kr.text, suggested_metric: kr.suggested_metric,
-          suggested_subtasks: kr.suggested_subtasks || [],
+          id: `temp-kr-${i}-${j}`,
+          kr_text: kr.text,
+          suggested_metric: kr.suggested_metric,
+          suggested_subtasks: Array.isArray(kr.suggested_subtasks) ? kr.suggested_subtasks : [],
           current_value: 0, progress_pct: 0
         }))
       })));
@@ -275,7 +333,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
                 <Loader2 size={28} style={{ color: '#3B4B6B' }} className="animate-spin" />
               </div>
               <h3 className="text-lg font-bold mb-2" style={{ color: '#1A1A1A' }}>Analyzing your focus area</h3>
-              <p className="text-sm" style={{ color: '#6B6558' }}>Matching your role against company pillars to generate SMART goals...</p>
+              <p className="text-sm" style={{ color: '#6B6558' }}>Matching your role against company pillars to generate SMART goals with subtasks...</p>
             </div>
           )}
 
@@ -301,7 +359,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
                 <label className="block text-xs font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#6B6558' }}>Focus Area</label>
                 <textarea required rows={4} placeholder="e.g. Improve backend performance..." className="w-full px-4 py-2.5 text-sm rounded-xl resize-none"
                   value={formData.focus_area} onChange={e => setFormData({ ...formData, focus_area: e.target.value })} />
-                
+
                 {/* Suggestions Pills */}
                 <div className="mt-2.5 space-y-1.5">
                   <span className="text-xs font-semibold" style={{ color: '#6B6558' }}>Quick Suggestions:</span>
@@ -317,7 +375,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
                         key={idx}
                         type="button"
                         onClick={() => setFormData({ ...formData, focus_area: pill })}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer hover:border-brand-amber hover:text-brand-orange"
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer"
                         style={{
                           background: formData.focus_area === pill ? 'linear-gradient(135deg, rgba(59,75,107,0.1), rgba(92,114,153,0.1))' : '#F7F4EE',
                           borderColor: formData.focus_area === pill ? '#3B4B6B' : '#E8E2D6',
@@ -338,7 +396,7 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
 
           {step === 'suggestions' && (
             <div className="space-y-5">
-              <p className="text-sm" style={{ color: '#6B6558' }}>AI-generated goals based on your focus area — review and save.</p>
+              <p className="text-sm" style={{ color: '#6B6558' }}>AI-generated goals with suggested subtasks — review, edit, and save.</p>
               {suggestions.map(goal => <SuggestedGoalCard key={goal.id} goal={goal} onSave={handleSaveGoal} userId={userId} />)}
               {suggestions.length === 0 && <p className="text-center py-8 italic" style={{ color: '#6B6558' }}>All suggestions processed!</p>}
             </div>

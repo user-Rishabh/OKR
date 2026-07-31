@@ -17,6 +17,7 @@ export interface KeyResult {
   unit?: string;
   progress_pct: number;
   kr_subtasks?: Subtask[];
+  suggested_subtasks?: string[];
 }
 
 export interface Goal {
