@@ -37,24 +37,28 @@ export default function Dashboard() {
   const { currentUser, session, loading: authLoading } = useAuth();
 
   /* ─── data fetch ──────────────────────────────────────────── */
+  const fetchGoals = async () => {
+    if (!currentUser || !session) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/goals?user_id=${currentUser.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` }
+      });
+      if (!res.ok) {
+        console.error(`Failed to fetch goals: ${res.status} ${res.statusText}`);
+        return;
+      }
+      const data = await res.json();
+      setActiveGoals(Array.isArray(data) ? data : []);
+    } catch (err) { console.error(err); }
+  };
+
   useEffect(() => {
-    const fetchGoals = async () => {
-      if (!currentUser || !session) return;
+    const init = async () => {
       setLoading(true);
-      try {
-        const res = await fetch(`http://localhost:8000/api/goals?user_id=${currentUser.id}`, {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        if (!res.ok) {
-          console.error(`Failed to fetch goals: ${res.status} ${res.statusText}`);
-          return;
-        }
-        const data = await res.json();
-        setActiveGoals(Array.isArray(data) ? data : []);
-      } catch (err) { console.error(err); }
-      finally { setLoading(false); }
+      await fetchGoals();
+      setLoading(false);
     };
-    fetchGoals();
+    init();
   }, [currentUser, session]);
 
   /* ─── stats ────────────────────────────────────────────────── */
@@ -123,11 +127,7 @@ export default function Dashboard() {
         body: JSON.stringify({ progress_pct: proposedProgress, note: updateText, reasoning: aiEstimate?.reasoning })
       });
       if (!res.ok) throw new Error();
-      const updatedKr = await res.json();
-      setActiveGoals(prev => prev.map(goal => ({
-        ...goal,
-        key_results: goal.key_results.map(kr => kr.id === krId ? { ...kr, progress_pct: updatedKr.progress_pct } : kr)
-      })));
+      await fetchGoals();
       setActiveUpdateKrId(null); setUpdateText(''); setAiEstimate(null);
     } catch { alert('Failed to save progress update.'); }
     finally { setIsSavingUpdate(false); }
