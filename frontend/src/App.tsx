@@ -8,6 +8,7 @@ import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Settings from './pages/Settings'
+import Feedback from './pages/Feedback'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
+          <Route path="feedback" element={<Feedback />} />
           <Route path="team" element={<Team />} />
           <Route path="team/member/:userId" element={<MemberDetail />} />
           <Route path="admin" element={<Admin />} />

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { LogOut, Target, LayoutDashboard, Users, Settings, ChevronLeft, ChevronRight, Menu, X, Sparkles } from 'lucide-react';
+import { LogOut, Target, LayoutDashboard, Users, Settings, ChevronLeft, ChevronRight, Menu, X, Sparkles, MessageSquare } from 'lucide-react';
 
 export default function Layout() {
   const location = useLocation();
@@ -17,6 +17,7 @@ export default function Layout() {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', roles: ['employee', 'manager', 'admin'], icon: LayoutDashboard },
+    { name: 'Feedback', path: '/feedback', roles: ['employee', 'manager', 'admin'], icon: MessageSquare },
     { name: 'Team', path: '/team', roles: ['manager', 'admin'], icon: Users },
     { name: 'Admin', path: '/admin', roles: ['admin', 'manager'], icon: Settings },
   ].filter(item => !currentUser || item.roles.includes(currentUser.role));

@@ -86,8 +86,20 @@ async def create_goal(goal_data: GoalCreate, current_user: dict = Depends(get_cu
 async def get_goals(user_id: str, current_user: dict = Depends(get_current_user)):
     if user_id != current_user["id"] and current_user["role"] not in ["manager", "admin"]:
         raise HTTPException(status_code=403, detail="Not authorized to view goals for this user")
-    goals_res = supabase.table("goals").select("*, key_results(*)").eq("user_id", user_id).order("created_at", desc=True).execute()
-    return goals_res.data
+    goals_res = supabase.table("goals").select("*, key_results(*, progress_logs(*, users(full_name)))").eq("user_id", user_id).order("created_at", desc=True).execute()
+    goals_data = goals_res.data
+    for goal in goals_data:
+        for kr in goal.get("key_results", []):
+            if "progress_logs" in kr and kr["progress_logs"]:
+                kr["progress_logs"] = sorted(
+                    kr["progress_logs"],
+                    key=lambda x: x.get("created_at", ""),
+                    reverse=True
+                )
+            else:
+                kr["progress_logs"] = []
+    return goals_data
+
 
 @router.delete("/{goal_id}", status_code=204)
 async def delete_goal(goal_id: str, current_user: dict = Depends(get_current_user)):

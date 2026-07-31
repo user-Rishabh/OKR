@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "copy-venv": "node -e \"const fs = require('fs'); if (!fs.existsSync('../backend/.venv')) { fs.symlinkSync('venv', '../backend/.venv', 'junction'); console.log('Symlink created'); } else { console.log('Symlink already exists'); }\""
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
