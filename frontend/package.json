@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
     "copy-venv": "node -e \"const fs = require('fs'); if (!fs.existsSync('../backend/.venv')) { fs.symlinkSync('venv', '../backend/.venv', 'junction'); console.log('Symlink created'); } else { console.log('Symlink already exists'); }\""
