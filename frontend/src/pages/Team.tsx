@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AlertCircle, ArrowRight, Users, Sparkles, RefreshCw, CheckCircle, AlertTriangle } from 'lucide-react';
+import { API_URL } from '../config';
 import { Link } from 'react-router-dom';
 import type { Goal } from '../types';
 import ProgressRing from '../components/ProgressRing';
@@ -51,7 +52,7 @@ export default function Team() {
     const fetchTeamData = async () => {
       if (!currentUser || !session || !currentUser.team_id) { setLoading(false); return; }
       try {
-        const res = await fetch(`http://localhost:8000/api/goals/team?team_id=${currentUser.team_id}`, {
+        const res = await fetch(`${API_URL}/api/goals/team?team_id=${currentUser.team_id}`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch team data');
@@ -64,7 +65,7 @@ export default function Team() {
     const fetchFlags = async () => {
       if (!currentUser || !session || !currentUser.team_id) { setLoadingFlags(false); return; }
       try {
-        const res = await fetch(`http://localhost:8000/api/goals/alignment-flags?team_id=${currentUser.team_id}`, {
+        const res = await fetch(`${API_URL}/api/goals/alignment-flags?team_id=${currentUser.team_id}`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (!res.ok) throw new Error('Failed to fetch alignment flags');
@@ -80,7 +81,7 @@ export default function Team() {
     const fetchPendingRequests = async () => {
       if (!currentUser || !session || currentUser.role !== 'manager') return;
       try {
-        const res = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+        const res = await fetch(`${API_URL}/api/profile/change-requests/pending`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (res.ok) {
@@ -106,7 +107,7 @@ export default function Team() {
 
   const handleReviewRequest = async (reqId: string, status: 'approved' | 'rejected') => {
     try {
-      const res = await fetch(`http://localhost:8000/api/profile/change-requests/${reqId}`, {
+      const res = await fetch(`${API_URL}/api/profile/change-requests/${reqId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -127,7 +128,7 @@ export default function Team() {
       setRejectNote('');
       
       // Refresh list
-      const requestsRes = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+      const requestsRes = await fetch(`${API_URL}/api/profile/change-requests/pending`, {
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
       if (requestsRes.ok) {
@@ -144,7 +145,7 @@ export default function Team() {
     setCheckingAlignment(true);
     setAlignmentError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/goals/check-alignment`, {
+      const res = await fetch(`${API_URL}/api/goals/check-alignment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

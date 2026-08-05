@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from "../config";
 import { useAuth } from '../context/AuthContext';
 import { 
   MessageSquare, 
@@ -77,7 +78,7 @@ export default function Feedback() {
     const fetchUsers = async () => {
       if (!session) return;
       try {
-        const res = await fetch('http://localhost:8000/api/users', {
+        const res = await fetch(`${API_URL}/api/users`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (res.ok) {
@@ -100,7 +101,7 @@ export default function Feedback() {
     try {
       // Fetch entries about me
       const resEntries = await fetch(
-        `http://localhost:8000/api/feedback?subject_user_id=${currentUser.id}&cycle=${globalCycle}`,
+        `${API_URL}/api/feedback?subject_user_id=${currentUser.id}&cycle=${globalCycle}`,
         { headers: { Authorization: `Bearer ${session.access_token}` } }
       );
       if (resEntries.ok) {
@@ -112,7 +113,7 @@ export default function Feedback() {
 
       // Fetch summary about me
       const resSummary = await fetch(
-        `http://localhost:8000/api/feedback/summary?subject_user_id=${currentUser.id}&cycle=${globalCycle}`,
+        `${API_URL}/api/feedback/summary?subject_user_id=${currentUser.id}&cycle=${globalCycle}`,
         { headers: { Authorization: `Bearer ${session.access_token}` } }
       );
       if (resSummary.ok) {
@@ -140,7 +141,7 @@ export default function Feedback() {
     try {
       // Fetch entries about selected report
       const resEntries = await fetch(
-        `http://localhost:8000/api/feedback?subject_user_id=${reportId}&cycle=${globalCycle}`,
+        `${API_URL}/api/feedback?subject_user_id=${reportId}&cycle=${globalCycle}`,
         { headers: { Authorization: `Bearer ${session.access_token}` } }
       );
       if (resEntries.ok) {
@@ -152,7 +153,7 @@ export default function Feedback() {
 
       // Fetch summary about selected report
       const resSummary = await fetch(
-        `http://localhost:8000/api/feedback/summary?subject_user_id=${reportId}&cycle=${globalCycle}`,
+        `${API_URL}/api/feedback/summary?subject_user_id=${reportId}&cycle=${globalCycle}`,
         { headers: { Authorization: `Bearer ${session.access_token}` } }
       );
       if (resSummary.ok) {
@@ -193,7 +194,7 @@ export default function Feedback() {
     const feedbackType = isSelf ? 'self' : (isManagerOrAdminUser ? 'manager' : 'peer');
 
     try {
-      const res = await fetch('http://localhost:8000/api/feedback', {
+      const res = await fetch(`${API_URL}/api/feedback`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -246,7 +247,7 @@ export default function Feedback() {
     setGenerationError(null);
 
     try {
-      const res = await fetch('http://localhost:8000/api/feedback/summarize', {
+      const res = await fetch(`${API_URL}/api/feedback/summarize`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

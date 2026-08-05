@@ -3,6 +3,7 @@ import { useNavigate, Navigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Target, Loader2, AlertCircle } from 'lucide-react';
+import { API_URL } from '../config';
 
 export default function Signup() {
   const [fullName, setFullName] = useState('');
@@ -22,7 +23,7 @@ export default function Signup() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('http://localhost:8000/api/auth/signup', {
+      const res = await fetch(`${API_URL}/api/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, full_name: fullName, job_title: jobTitle, department })

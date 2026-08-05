@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Check, Loader2, RefreshCw, Send, Settings as SettingsIcon, User, Mail, Briefcase, Network } from 'lucide-react';
+import { API_URL } from '../config';
 
 interface ChangeRequest {
   id: string;
@@ -33,7 +34,7 @@ export default function Settings() {
     }
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/profile/change-requests?user_id=${currentUser.id}`, {
+      const res = await fetch(`${API_URL}/api/profile/change-requests?user_id=${currentUser.id}`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       if (!res.ok) {
@@ -60,7 +61,7 @@ export default function Settings() {
     setSubmittingRequest(true);
     setSuccessMessage(null);
     try {
-      const res = await fetch('http://localhost:8000/api/profile/change-request', {
+      const res = await fetch(`${API_URL}/api/profile/change-request`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

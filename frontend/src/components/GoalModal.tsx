@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Check, Edit2, Sparkles, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import type { Goal } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from "../config";
 
 interface GoalModalProps {
   isOpen: boolean;
@@ -63,7 +64,7 @@ function SuggestedGoalCard({ goal, onSave, userId }: { goal: Goal; onSave: (save
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const res = await fetch('http://localhost:8000/api/goals', {
+      const res = fetch(`${API_URL}/api/goals`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
         body: JSON.stringify({
@@ -265,10 +266,10 @@ export default function GoalModal({ isOpen, onClose, onSave, userId }: GoalModal
   const handleSuggest = async (e: React.FormEvent) => {
     e.preventDefault(); setStep('loading'); setError(null);
     try {
-      const companyRes = await fetch('http://localhost:8000/api/companies/current');
+      const companyRes = await fetch(`${API_URL}/api/companies/current`);
       if (!companyRes.ok) throw new Error('Failed to fetch company context');
       const company = await companyRes.json();
-      const suggestRes = await fetch('http://localhost:8000/api/goals/suggest', {
+      const suggestRes = await fetch(`${API_URL}/api/goals/suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, company_id: company.id })

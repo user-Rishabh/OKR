@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Settings, Building2, Plus, Trash2, Edit2, Save, X, AlertCircle, Loader2, Sparkles, Check, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { API_URL } from "../config";
 
 interface Pillar {
   id: string;
@@ -51,16 +52,23 @@ export default function Admin() {
     }
     
     try {
-      // 1. Fetch current company
-      const companyRes = await fetch('http://localhost:8000/api/companies/current', {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      });
-      if (!companyRes.ok) throw new Error('Failed to fetch company details');
-      const companyData = await companyRes.json();
-      setCompany(companyData);
+      // 1. Fetch curre
+    
+      const companyRes = await fetch(`${API_URL}/api/companies/current`, {
+    headers: { 
+        Authorization: `Bearer ${session.access_token}` 
+    }
+});
+
+if (!companyRes.ok) {
+    throw new Error('Failed to fetch company details');
+}
+
+const companyData = await companyRes.json();
+setCompany(companyData);
 
       // 2. Fetch strategic pillars
-      const pillarsRes = await fetch(`http://localhost:8000/api/pillars?company_id=${companyData.id}`, {
+      const pillarsRes = await fetch(`${API_URL}/api/pillars?company_id=${companyData.id}`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       if (!pillarsRes.ok) throw new Error('Failed to fetch strategic pillars');
@@ -68,7 +76,7 @@ export default function Admin() {
       setPillars(pillarsData);
 
       // 3. Fetch pending profile change requests
-      const requestsRes = await fetch('http://localhost:8000/api/profile/change-requests/pending', {
+      const requestsRes = await fetch(`${API_URL}/api/profile/change-requests/pending`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
       });
       if (requestsRes.ok) {
@@ -93,7 +101,7 @@ export default function Admin() {
     
     setCreatingPillar(true);
     try {
-      const res = await fetch('http://localhost:8000/api/pillars', {
+      const res = await fetch(`${API_URL}/api/pillars`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -140,7 +148,7 @@ export default function Admin() {
     
     setUpdatingPillar(true);
     try {
-      const res = await fetch(`http://localhost:8000/api/pillars/${pillarId}`, {
+      const res = await fetch(`${API_URL}/api/pillars/${pillarId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -176,7 +184,7 @@ export default function Admin() {
     if (!window.confirm(confirmationMsg)) return;
     
     try {
-      const res = await fetch(`http://localhost:8000/api/pillars/${pillar.id}`, {
+      const res = await fetch(`${API_URL}/api/pillars/${pillar.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
@@ -195,7 +203,7 @@ export default function Admin() {
   // Handle Profile Request Approval / Rejection
   const handleReviewRequest = async (reqId: string, status: 'approved' | 'rejected') => {
     try {
-      const res = await fetch(`http://localhost:8000/api/profile/change-requests/${reqId}`, {
+      const res = await fetch(`${API_URL}/api/profile/change-requests/${reqId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

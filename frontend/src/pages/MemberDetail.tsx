@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ArrowLeft, AlertCircle, Loader2, ChevronDown, ChevronUp, Clock, Calendar, Sparkles } from 'lucide-react';
+import { API_URL } from '../config';
 import type { Goal, KeyResult } from '../types';
 import ProgressRing from '../components/ProgressRing';
 
@@ -41,7 +42,7 @@ export default function MemberDetail() {
   const handleGetNudge = async (goalId: string) => {
     setNudges(prev => ({ ...prev, [goalId]: { text: '', loading: true } }));
     try {
-      const res = await fetch(`http://localhost:8000/api/goals/${goalId}/checkin`, {
+      const res = await fetch(`${API_URL}/api/goals/${goalId}/checkin`, {
         method: 'POST', headers: { Authorization: `Bearer ${session?.access_token}`, 'Content-Type': 'application/json' }
       });
       if (!res.ok) throw new Error();
@@ -56,7 +57,7 @@ export default function MemberDetail() {
     const fetchMemberActivity = async () => {
       if (!userId || !session) return;
       try {
-        const res = await fetch(`http://localhost:8000/api/users/${userId}/activity`, {
+        const res = await fetch(`${API_URL}/api/users/${userId}/activity`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         });
         if (!res.ok) throw new Error(res.status === 403

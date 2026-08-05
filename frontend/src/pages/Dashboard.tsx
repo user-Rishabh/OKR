@@ -8,6 +8,8 @@ import ProgressRing from '../components/ProgressRing';
 import { SkeletonCard } from '../components/Skeleton';
 import useCountUp from '../hooks/useCountUp';
 
+import { API_URL } from "../config";
+
 /* ─── helpers ─────────────────────────────────────────────── */
 const topBarClass = (pct: number) =>
   pct >= 70 ? 'card-top-green' : pct >= 30 ? 'card-top-orange' : 'card-top-red';
@@ -32,9 +34,9 @@ export default function Dashboard() {
   const fetchGoals = async () => {
     if (!currentUser || !session) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/goals?user_id=${currentUser.id}`, {
+      const res = await fetch(`${API_URL}/api/goals?user_id=${currentUser.id}`, {
         headers: { Authorization: `Bearer ${session.access_token}` }
-      });
+      })
       if (!res.ok) {
         console.error(`Failed to fetch goals: ${res.status} ${res.statusText}`);
         return;
@@ -86,7 +88,7 @@ export default function Dashboard() {
 
   const handleToggleSubtask = async (subtaskId: string, isComplete: boolean) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/subtasks/${subtaskId}`, {
+      const res = await fetch(`${API_URL}/api/subtasks/${subtaskId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ is_complete: isComplete })
@@ -103,7 +105,7 @@ export default function Dashboard() {
     if (!title) return;
 
     try {
-      const res = await fetch(`http://localhost:8000/api/key-results/${krId}/subtasks`, {
+      const res = await fetch(`${API_URL}/api/key-results/${krId}/subtasks`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ title })
@@ -118,7 +120,7 @@ export default function Dashboard() {
 
   const handleDeleteSubtask = async (subtaskId: string) => {
     try {
-      const res = await fetch(`http://localhost:8000/api/subtasks/${subtaskId}`, {
+      const res = await fetch(`${API_URL}/api/subtasks/${subtaskId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${session?.access_token}` }
       });
@@ -132,7 +134,7 @@ export default function Dashboard() {
   const handleDeleteGoal = async (goalId: string) => {
     if (!window.confirm('Delete this goal? This cannot be undone.')) return;
     try {
-      const res = await fetch(`http://localhost:8000/api/goals/${goalId}`, {
+      const res = await fetch(`${API_URL}/api/goals/${goalId}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session?.access_token}` }
       });
       if (!res.ok) throw new Error();
